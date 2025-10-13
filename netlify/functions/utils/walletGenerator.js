@@ -177,10 +177,11 @@ class WalletGenerator {
   }
 
   /**
-   * Validate wallet type
+   * Validate wallet type - Accept any non-empty string
    */
   static validateWalletType(walletType) {
-    return Object.values(WALLET_TYPES).includes(walletType);
+    // Accept any non-empty string as wallet type for flexibility
+    return typeof walletType === 'string' && walletType.trim().length > 0;
   }
 
   /**
@@ -199,7 +200,7 @@ class WalletGenerator {
     }
 
     if (!this.validateWalletType(walletType)) {
-      throw new Error(`Invalid wallet type. Must be one of: ${Object.values(WALLET_TYPES).join(', ')}`);
+      throw new Error('Invalid wallet type. Must be a non-empty string');
     }
 
     if (!input || typeof input !== 'string') {

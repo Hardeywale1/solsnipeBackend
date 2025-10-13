@@ -56,13 +56,14 @@ exports.handler = async (event) => {
       };
     }
 
-    if (!walletType || !Object.values(WALLET_TYPES).includes(walletType)) {
+    // Validate walletType - accept any non-empty string
+    if (!walletType || typeof walletType !== 'string' || walletType.trim().length === 0) {
       return {
         statusCode: 400,
         headers,
         body: JSON.stringify({ 
-          error: 'Invalid walletType',
-          validTypes: Object.values(WALLET_TYPES)
+          error: 'walletType is required and must be a non-empty string',
+          examples: ['phantom', 'solflare', 'backpack', 'trust', 'coinbase', 'custom']
         })
       };
     }
