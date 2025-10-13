@@ -1,0 +1,18 @@
+[build]
+  functions = "netlify/functions"
+  publish = "public"
+
+[dev]
+  functions = "netlify/functions"
+  publish = "public"
+  # Disable bundler for dev to preserve environment variables
+  targetPort = 8888
+
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/:splat"
+  status = 200
+
+[functions]
+  # Disable bundler in development - use esbuild only for production
+  node_bundler = "none"

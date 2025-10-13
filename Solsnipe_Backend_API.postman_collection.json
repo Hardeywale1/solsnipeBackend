@@ -1,0 +1,619 @@
+{
+  "info": {
+    "name": "Solsnipe Backend API",
+    "description": "Complete API collection for Solsnipe wallet-based authentication and balance management system with admin controls",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "_postman_id": "solsnipe-backend-api-v1",
+    "version": "1.0.0"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      {
+        "key": "token",
+        "value": "{{userToken}}",
+        "type": "string"
+      }
+    ]
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8888/api",
+      "type": "string"
+    },
+    {
+      "key": "productionUrl",
+      "value": "https://your-site.netlify.app/api",
+      "type": "string"
+    },
+    {
+      "key": "userToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refreshToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "adminToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "testWallet",
+      "value": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb",
+      "type": "string"
+    },
+    {
+      "key": "adminEmail",
+      "value": "admin@solsnipe.com",
+      "type": "string"
+    },
+    {
+      "key": "adminPassword",
+      "value": "your_admin_password",
+      "type": "string"
+    },
+    {
+      "key": "superAdminApiKey",
+      "value": "your_super_admin_api_key",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "1. User Authentication",
+      "item": [
+        {
+          "name": "Connect Wallet (Ethereum)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200 || pm.response.code === 201) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.token) {",
+                  "        pm.collectionVariables.set('userToken', response.data.token);",
+                  "        pm.collectionVariables.set('refreshToken', response.data.refreshToken);",
+                  "        console.log('✓ User token saved:', response.data.token.substring(0, 20) + '...');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{testWallet}}\",\n  \"chain\": \"ethereum\",\n  \"metadata\": {\n    \"device\": \"postman\",\n    \"platform\": \"testing\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/anonymous-auth",
+              "host": ["{{baseUrl}}"],
+              "path": ["anonymous-auth"]
+            },
+            "description": "Authenticate user with wallet address. Creates new session or returns existing one."
+          },
+          "response": []
+        },
+        {
+          "name": "Connect Wallet (Solana)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"7xKXtg2CW87d97TXJSDpbD5jBkheTqA83TZRuJosgAsU\",\n  \"chain\": \"solana\",\n  \"metadata\": {\n    \"device\": \"mobile\",\n    \"platform\": \"ios\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/anonymous-auth",
+              "host": ["{{baseUrl}}"],
+              "path": ["anonymous-auth"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Verify Token",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/verify-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["verify-token"]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Refresh Token",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"refreshToken\": \"{{refreshToken}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/refresh-token",
+              "host": ["{{baseUrl}}"],
+              "path": ["refresh-token"]
+            }
+          },
+          "response": []
+        }
+      ],
+      "description": "User wallet authentication endpoints"
+    },
+    {
+      "name": "2. Admin Authentication",
+      "item": [
+        {
+          "name": "Admin Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    const response = pm.response.json();",
+                  "    if (response.success && response.data.token) {",
+                  "        pm.collectionVariables.set('adminToken', response.data.token);",
+                  "        console.log('✓ Admin token saved:', response.data.token.substring(0, 20) + '...');",
+                  "    }",
+                  "}"
+                ],
+                "type": "text/javascript"
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{adminEmail}}\",\n  \"password\": \"{{adminPassword}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/admin/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["admin", "login"]
+            },
+            "description": "Admin login with email and password. Returns admin JWT token valid for 24 hours."
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin authentication endpoints"
+    },
+    {
+      "name": "3. Wallet Balance",
+      "item": [
+        {
+          "name": "Get Balance",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/get-balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["get-balance"]
+            },
+            "description": "Get current balance for authenticated wallet"
+          },
+          "response": []
+        },
+        {
+          "name": "Get Transactions",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/get-transactions?limit=50&offset=0",
+              "host": ["{{baseUrl}}"],
+              "path": ["get-transactions"],
+              "query": [
+                {
+                  "key": "limit",
+                  "value": "50"
+                },
+                {
+                  "key": "offset",
+                  "value": "0"
+                },
+                {
+                  "key": "type",
+                  "value": "credit",
+                  "disabled": true
+                }
+              ]
+            },
+            "description": "Get transaction history with optional filtering by type"
+          },
+          "response": []
+        }
+      ],
+      "description": "Wallet balance query endpoints (user access)"
+    },
+    {
+      "name": "4. Admin - Balance Management (Token Auth)",
+      "item": [
+        {
+          "name": "Credit Wallet (Admin Token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{testWallet}}\",\n  \"amount\": 500,\n  \"reason\": \"Reward for completing quest\",\n  \"metadata\": {\n    \"questId\": \"quest_001\",\n    \"questName\": \"Complete 10 trades\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/credit-wallet",
+              "host": ["{{baseUrl}}"],
+              "path": ["credit-wallet"]
+            },
+            "description": "Admin adds funds to a wallet using Bearer token authentication"
+          },
+          "response": []
+        },
+        {
+          "name": "Debit Wallet (Admin Token)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{testWallet}}\",\n  \"amount\": 100,\n  \"reason\": \"Purchase premium item\",\n  \"metadata\": {\n    \"itemId\": \"item_premium_001\",\n    \"itemName\": \"Golden Sword\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/debit-wallet",
+              "host": ["{{baseUrl}}"],
+              "path": ["debit-wallet"]
+            },
+            "description": "Admin deducts funds from a wallet using Bearer token authentication"
+          },
+          "response": []
+        },
+        {
+          "name": "Set Balance (Admin Token)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{testWallet}}\",\n  \"balance\": 1000,\n  \"reason\": \"Balance correction after audit\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/set-balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["set-balance"]
+            },
+            "description": "Admin directly sets wallet balance to a specific value"
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin balance management using Bearer token (after admin login)"
+    },
+    {
+      "name": "5. Admin - Balance Management (API Key)",
+      "item": [
+        {
+          "name": "Credit Wallet (API Key)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{superAdminApiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{testWallet}}\",\n  \"amount\": 250,\n  \"reason\": \"Automated reward - Daily login\",\n  \"metadata\": {\n    \"rewardType\": \"daily_login\",\n    \"day\": 7\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/credit-wallet",
+              "host": ["{{baseUrl}}"],
+              "path": ["credit-wallet"]
+            },
+            "description": "Admin adds funds using API key (for backend services)"
+          },
+          "response": []
+        },
+        {
+          "name": "Debit Wallet (API Key)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{superAdminApiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{testWallet}}\",\n  \"amount\": 50,\n  \"reason\": \"Service fee - Premium subscription\",\n  \"metadata\": {\n    \"subscriptionType\": \"premium\",\n    \"period\": \"monthly\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/debit-wallet",
+              "host": ["{{baseUrl}}"],
+              "path": ["debit-wallet"]
+            },
+            "description": "Admin deducts funds using API key (for backend services)"
+          },
+          "response": []
+        },
+        {
+          "name": "Set Balance (API Key)",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-API-Key",
+                "value": "{{superAdminApiKey}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{testWallet}}\",\n  \"balance\": 2000,\n  \"reason\": \"Migration adjustment from old system\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/set-balance",
+              "host": ["{{baseUrl}}"],
+              "path": ["set-balance"]
+            },
+            "description": "Admin sets balance using API key (for automated systems)"
+          },
+          "response": []
+        }
+      ],
+      "description": "Admin balance management using API key (for backend services, no login required)"
+    },
+    {
+      "name": "6. Session Management",
+      "item": [
+        {
+          "name": "Get Session",
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/get-session",
+              "host": ["{{baseUrl}}"],
+              "path": ["get-session"]
+            },
+            "description": "Retrieve current user session information"
+          },
+          "response": []
+        },
+        {
+          "name": "Update Session",
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"metadata\": {\n    \"theme\": \"dark\",\n    \"language\": \"en\",\n    \"notifications\": true,\n    \"preferredChain\": \"ethereum\"\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/update-session",
+              "host": ["{{baseUrl}}"],
+              "path": ["update-session"]
+            },
+            "description": "Update session metadata/preferences"
+          },
+          "response": []
+        },
+        {
+          "name": "Delete Session",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{userToken}}",
+                "type": "text"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/delete-session",
+              "host": ["{{baseUrl}}"],
+              "path": ["delete-session"]
+            },
+            "description": "Delete current user session (logout)"
+          },
+          "response": []
+        }
+      ],
+      "description": "Session management endpoints"
+    },
+    {
+      "name": "7. Error Cases & Testing",
+      "item": [
+        {
+          "name": "Unauthorized Credit (No Auth)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{testWallet}}\",\n  \"amount\": 100,\n  \"reason\": \"Should fail - no authentication\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/credit-wallet",
+              "host": ["{{baseUrl}}"],
+              "path": ["credit-wallet"]
+            },
+            "description": "Should return 403 - Admin access required"
+          },
+          "response": []
+        },
+        {
+          "name": "Insufficient Balance Debit",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{adminToken}}",
+                "type": "text"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"{{testWallet}}\",\n  \"amount\": 999999,\n  \"reason\": \"Should fail - insufficient balance\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/debit-wallet",
+              "host": ["{{baseUrl}}"],
+              "path": ["debit-wallet"]
+            },
+            "description": "Should return 400 - Insufficient balance"
+          },
+          "response": []
+        },
+        {
+          "name": "Invalid Wallet Address",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"walletAddress\": \"invalid-wallet-address\",\n  \"chain\": \"ethereum\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/anonymous-auth",
+              "host": ["{{baseUrl}}"],
+              "path": ["anonymous-auth"]
+            },
+            "description": "Should return 400 - Invalid wallet address"
+          },
+          "response": []
+        }
+      ],
+      "description": "Test error handling and edge cases"
+    }
+  ]
+}
