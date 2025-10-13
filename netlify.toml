@@ -1,11 +1,11 @@
 [build]
   functions = "netlify/functions"
   publish = "public"
+  command = "npm install"
 
 [dev]
   functions = "netlify/functions"
   publish = "public"
-  # Disable bundler for dev to preserve environment variables
   targetPort = 8888
 
 [[redirects]]
@@ -14,5 +14,7 @@
   status = 200
 
 [functions]
-  # Disable bundler in development - use esbuild only for production
-  node_bundler = "none"
+  # Use esbuild bundler for production to include dependencies
+  node_bundler = "esbuild"
+  # Set external node modules that should not be bundled
+  external_node_modules = []
