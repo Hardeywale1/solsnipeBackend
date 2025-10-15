@@ -120,6 +120,17 @@ exports.handler = async (event) => {
       lastLoginAt: wallet.lastLoginAt,
       loginCount: wallet.loginCount || 0,
       
+      // Credit tracking
+      totalSolCredited: wallet.totalSolCredited || 0,
+      totalSolsnipeCredited: wallet.totalSolsnipeCredited || 0,
+      
+      // Auto snipe and trade counters
+      autoSnipeBot: wallet.autoSnipeBot || 0,
+      totalTrade: wallet.totalTrade || 0,
+      
+      // Withdrawal requests
+      withdrawal: wallet.withdrawal ? (wallet.withdrawal.trim() !== '' ? JSON.parse(wallet.withdrawal) : []) : [],
+      
       // Additional metadata
       metadata: wallet.metadata || {}
     };
@@ -127,6 +138,8 @@ exports.handler = async (event) => {
     console.log('✅ Wallet details retrieved successfully');
     console.log('   SOL Balance:', walletDetails.balance);
     console.log('   Solsnipe Balance:', walletDetails.solsnipeBalance);
+    console.log('   Auto Snipe Bot:', walletDetails.autoSnipeBot);
+    console.log('   Total Trades:', walletDetails.totalTrade);
 
     return {
       statusCode: 200,

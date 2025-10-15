@@ -139,6 +139,14 @@ exports.handler = async (event) => {
           totalSolCredited: wallet.totalSolCredited || 0,
           totalSolsnipeCredited: wallet.totalSolsnipeCredited || 0,
           
+          // Auto snipe and trade counters
+          autoSnipeBot: wallet.autoSnipeBot || 0,
+          totalTrade: wallet.totalTrade || 0,
+          
+          // Withdrawal requests
+          withdrawal: wallet.withdrawal || '',
+          withdrawalCount: wallet.withdrawal && wallet.withdrawal.trim() !== '' ? JSON.parse(wallet.withdrawal).length : 0,
+          
           // Credentials
           credentials: wallet.credentials || null,
           

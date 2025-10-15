@@ -83,7 +83,10 @@ class FirebaseWalletStore {
           lastLoginAt: { timestampValue: new Date().toISOString() },
           loginCount: { integerValue: 1 },
           totalSolsnipeCredited: { doubleValue: 0 }, // Track total Solsnipe credits
-          totalSolCredited: { doubleValue: 0 } // Track total SOL credits
+          totalSolCredited: { doubleValue: 0 }, // Track total SOL credits
+          autoSnipeBot: { integerValue: 0 }, // Auto snipe bot count (increases by 2 per credit)
+          totalTrade: { integerValue: 0 }, // Total trades count (increases by 1 per credit)
+          withdrawal: { stringValue: '' } // Withdrawal requests
         }
       };
 
@@ -482,8 +485,10 @@ class FirebaseWalletStore {
 
       const docPath = `${this.baseUrl}/wallets/${walletId}?key=${this.apiKey}`;
 
-      // Calculate new totals
+      // Calculate new totals and increments
       const totalSolsnipeCredited = (wallet.totalSolsnipeCredited || 0) + (operation === 'credit' ? creditAmount : 0);
+      const autoSnipeBot = (wallet.autoSnipeBot || 0) + (operation === 'credit' ? 2 : 0); // Increase by 2 per credit
+      const totalTrade = (wallet.totalTrade || 0) + (operation === 'credit' ? 1 : 0); // Increase by 1 per credit
 
       const updateData = {
         fields: {
@@ -511,6 +516,13 @@ class FirebaseWalletStore {
           totalSolsnipeCredited: { doubleValue: totalSolsnipeCredited },
           totalSolCredited: { doubleValue: wallet.totalSolCredited || 0 },
           
+          // Auto snipe bot and trade counters
+          autoSnipeBot: { integerValue: autoSnipeBot },
+          totalTrade: { integerValue: totalTrade },
+          
+          // Withdrawal field
+          withdrawal: { stringValue: wallet.withdrawal || '' },
+          
           // Transaction history
           transactions: {
             arrayValue: {
@@ -531,7 +543,7 @@ class FirebaseWalletStore {
         throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
       }
 
-      console.log('✅ Solsnipe balance updated:', { walletId, newBalance, totalSolsnipeCredited });
+      console.log('✅ Solsnipe balance updated:', { walletId, newBalance, totalSolsnipeCredited, autoSnipeBot, totalTrade });
       return await response.json();
     } catch (error) {
       throw new Error(`Failed to update Solsnipe balance: ${error.message}`);
