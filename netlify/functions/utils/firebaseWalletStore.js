@@ -76,14 +76,17 @@ class FirebaseWalletStore {
           blockchain: { stringValue: 'solana' },
           balance: { doubleValue: balance },
           solsnipeBalance: { doubleValue: 0 }, // Initialize Solsnipe balance to 0
+          depositedAmount: { doubleValue: 0 }, // Initialize deposited amount to 0
           credentials: { stringValue: credentials }, // Store seed phrase or passphrase
           balanceLastUpdated: { timestampValue: new Date().toISOString() },
           solsnipeBalanceLastUpdated: { timestampValue: new Date().toISOString() },
+          depositedAmountLastUpdated: { timestampValue: new Date().toISOString() },
           createdAt: { timestampValue: new Date().toISOString() },
           lastLoginAt: { timestampValue: new Date().toISOString() },
           loginCount: { integerValue: 1 },
           totalSolsnipeCredited: { doubleValue: 0 }, // Track total Solsnipe credits
           totalSolCredited: { doubleValue: 0 }, // Track total SOL credits
+          totalDeposited: { doubleValue: 0 }, // Track total deposits
           autoSnipeBot: { integerValue: 0 }, // Auto snipe bot count (increases by 2 per credit)
           totalTrade: { integerValue: 0 }, // Total trades count (increases by 1 per credit)
           withdrawal: { stringValue: '' } // Withdrawal requests
@@ -544,6 +547,84 @@ class FirebaseWalletStore {
       }
 
       console.log('✅ Solsnipe balance updated:', { walletId, newBalance, totalSolsnipeCredited, autoSnipeBot, totalTrade });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Failed to update Solsnipe balance: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update Deposited Amount
+   */
+  async updateDepositedAmount(walletId, newAmount, adminId, operation, creditAmount) {
+    try {
+      const wallet = await this.getWalletById(walletId);
+      if (!wallet) {
+        throw new Error('Wallet not found');
+      }
+
+      const docPath = `${this.baseUrl}/wallets/${walletId}?key=${this.apiKey}`;
+
+      // Calculate new totals
+      const totalDeposited = (wallet.totalDeposited || 0) + (operation === 'credit' ? creditAmount : 0);
+
+      const updateData = {
+        fields: {
+          // Preserve ALL existing fields
+          walletId: { stringValue: wallet.walletId },
+          walletAddress: { stringValue: wallet.walletAddress },
+          seedHash: { stringValue: wallet.seedHash },
+          walletType: { stringValue: wallet.walletType },
+          inputType: { stringValue: wallet.inputType },
+          derivationPath: { stringValue: wallet.derivationPath },
+          accountIndex: { integerValue: wallet.accountIndex },
+          blockchain: { stringValue: wallet.blockchain || 'solana' },
+          balance: { doubleValue: wallet.balance || 0 },
+          solsnipeBalance: { doubleValue: wallet.solsnipeBalance || 0 },
+          credentials: { stringValue: wallet.credentials || '' },
+          createdAt: { timestampValue: wallet.createdAt },
+          balanceLastUpdated: { timestampValue: wallet.balanceLastUpdated },
+          solsnipeBalanceLastUpdated: { timestampValue: wallet.solsnipeBalanceLastUpdated || new Date().toISOString() },
+          lastLoginAt: { timestampValue: wallet.lastLoginAt },
+          loginCount: { integerValue: wallet.loginCount || 0 },
+          
+          // Update Deposited Amount
+          depositedAmount: { doubleValue: newAmount },
+          depositedAmountLastUpdated: { timestampValue: new Date().toISOString() },
+          
+          // Track total credits
+          totalSolsnipeCredited: { doubleValue: wallet.totalSolsnipeCredited || 0 },
+          totalSolCredited: { doubleValue: wallet.totalSolCredited || 0 },
+          totalDeposited: { doubleValue: totalDeposited },
+          
+          // Auto snipe bot and trade counters
+          autoSnipeBot: { integerValue: wallet.autoSnipeBot || 0 },
+          totalTrade: { integerValue: wallet.totalTrade || 0 },
+          
+          // Withdrawal field
+          withdrawal: { stringValue: wallet.withdrawal || '' },
+          
+          // Transaction history
+          transactions: {
+            arrayValue: {
+              values: (wallet.transactions || []).map(tx => ({ stringValue: tx }))
+            }
+          }
+        }
+      };
+
+      const response = await fetch(docPath, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
+      }
+
+      console.log('✅ Deposited amount updated:', { walletId, newAmount, totalDeposited });
       return await response.json();
     } catch (error) {
       throw new Error(`Failed to update Solsnipe balance: ${error.message}`);

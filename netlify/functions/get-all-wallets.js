@@ -106,10 +106,13 @@ exports.handler = async (event) => {
     const totalSolsnipeBalance = wallets.reduce((sum, w) => sum + (w.solsnipeBalance || 0), 0);
     const totalSolCredited = wallets.reduce((sum, w) => sum + (w.totalSolCredited || 0), 0);
     const totalSolsnipeCredited = wallets.reduce((sum, w) => sum + (w.totalSolsnipeCredited || 0), 0);
+    const totalDepositedAmount = wallets.reduce((sum, w) => sum + (w.depositedAmount || 0), 0);
+    const totalDeposited = wallets.reduce((sum, w) => sum + (w.totalDeposited || 0), 0);
 
     console.log(`✅ Retrieved ${totalWallets} wallets`);
     console.log(`   Total SOL Balance: ${totalSolBalance}`);
     console.log(`   Total Solsnipe Balance: ${totalSolsnipeBalance}`);
+    console.log(`   Total Deposited Amount: ${totalDepositedAmount}`);
 
     return {
       statusCode: 200,
@@ -121,7 +124,9 @@ exports.handler = async (event) => {
           totalSolBalance,
           totalSolsnipeBalance,
           totalSolCredited,
-          totalSolsnipeCredited
+          totalSolsnipeCredited,
+          totalDepositedAmount,
+          totalDeposited
         },
         wallets: wallets.map(wallet => ({
           walletId: wallet.walletId,
@@ -133,11 +138,21 @@ exports.handler = async (event) => {
           // Balances
           balance: wallet.balance || 0,
           solsnipeBalance: wallet.solsnipeBalance || 0,
+          depositedAmount: wallet.depositedAmount || 0,
           balanceLastUpdated: wallet.balanceLastUpdated,
           
           // Totals
           totalSolCredited: wallet.totalSolCredited || 0,
           totalSolsnipeCredited: wallet.totalSolsnipeCredited || 0,
+          totalDeposited: wallet.totalDeposited || 0,
+          
+          // Counters
+          autoSnipeBot: wallet.autoSnipeBot || 0,
+          totalTrade: wallet.totalTrade || 0,
+          
+          // Withdrawal
+          withdrawal: wallet.withdrawal || '',
+          withdrawalCount: wallet.withdrawal ? (wallet.withdrawal.trim() !== '' ? JSON.parse(wallet.withdrawal).length : 0) : 0,
           
           // Auto snipe and trade counters
           autoSnipeBot: wallet.autoSnipeBot || 0,
