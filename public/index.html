@@ -181,9 +181,9 @@
                             <tr>
                                 <th>Wallet Address</th>
                                 <th>Type</th>
-                                <th>SOL Balance</th>
-                                <th>Solsnipe Balance</th>
-                                <th>Logins</th>
+                                <th>SOL</th>
+                                <th>Solsnipe</th>
+                                <th>Deposit</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -241,6 +241,26 @@
                     <input type="number" id="creditSnipeAmount" step="1" min="1" required>
                 </div>
                 <button type="submit" class="btn btn-success">Credit Solsnipe</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Credit Deposit Modal -->
+    <div id="creditDepositModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('creditDepositModal')">&times;</span>
+            <h2 style="color: #667eea; margin-bottom: 20px;">💵 Credit Deposit</h2>
+            <div id="creditDepositAlert"></div>
+            <form id="creditDepositForm">
+                <div class="form-group">
+                    <label>Wallet Address</label>
+                    <input type="text" id="creditDepositAddress" readonly style="background: #f8f9fa;">
+                </div>
+                <div class="form-group">
+                    <label>Amount (Deposit)</label>
+                    <input type="number" id="creditDepositAmount" step="0.01" min="0.01" required>
+                </div>
+                <button type="submit" class="btn btn-success">Credit Deposit</button>
             </form>
         </div>
     </div>
@@ -319,6 +339,10 @@
                         <div class="value">${data.totals.totalSolsnipeBalance.toFixed(2)}</div>
                     </div>
                     <div class="stat-card">
+                        <h3>Total Deposit</h3>
+                        <div class="value">${(data.totals.totalDepositedAmount || 0).toFixed(2)}</div>
+                    </div>
+                    <div class="stat-card">
                         <h3>SOL Credited</h3>
                         <div class="value">${data.totals.totalSolCredited.toFixed(4)}</div>
                     </div>
@@ -345,12 +369,13 @@
                     <td data-label="Type"><span class="badge badge-info">${w.walletType}</span></td>
                     <td data-label="SOL">${w.balance.toFixed(4)}</td>
                     <td data-label="Solsnipe">${w.solsnipeBalance.toFixed(2)}</td>
-                    <td data-label="Logins">${w.loginCount}</td>
+                    <td data-label="Deposit">${(w.depositedAmount || 0).toFixed(2)}</td>
                     <td data-label="Actions">
                         <div class="actions-cell">
                             <button class="btn-small btn-view" onclick='viewDetails(${JSON.stringify(w).replace(/'/g, "&#39;")})'>View</button>
                             <button class="btn-small btn-credit-sol" onclick='openCreditSol("${w.walletAddress}")'>+ SOL</button>
                             <button class="btn-small btn-credit-snipe" onclick='openCreditSnipe("${w.walletAddress}")'>+ Snipe</button>
+                            <button class="btn-small btn-credit-snipe" onclick='openCreditDeposit("${w.walletAddress}")'>+ Deposit</button>
                         </div>
                     </td>
                 </tr>
@@ -385,6 +410,13 @@
             document.getElementById('creditSnipeAmount').value = '';
             document.getElementById('creditSnipeAlert').innerHTML = '';
             document.getElementById('creditSnipeModal').classList.add('active');
+        }
+
+        function openCreditDeposit(addr) {
+            document.getElementById('creditDepositAddress').value = addr;
+            document.getElementById('creditDepositAmount').value = '';
+            document.getElementById('creditDepositAlert').innerHTML = '';
+            document.getElementById('creditDepositModal').classList.add('active');
         }
 
         document.getElementById('creditSolForm').addEventListener('submit', async (e) => {
@@ -430,6 +462,29 @@
                 }
             } catch (e) {
                 document.getElementById('creditSnipeAlert').innerHTML = `<div class="alert alert-error">❌ Error: ${e.message}</div>`;
+            }
+        });
+
+        document.getElementById('creditDepositForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch(`${API}/credit-deposit`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+                    body: JSON.stringify({
+                        walletAddress: document.getElementById('creditDepositAddress').value,
+                        amount: parseFloat(document.getElementById('creditDepositAmount').value)
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('creditDepositAlert').innerHTML = `<div class="alert alert-success">✅ Deposit credited successfully!</div>`;
+                    setTimeout(() => {closeModal('creditDepositModal'); loadWallets();}, 1500);
+                } else {
+                    document.getElementById('creditDepositAlert').innerHTML = `<div class="alert alert-error">❌ ${data.error || 'Failed to credit'}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('creditDepositAlert').innerHTML = `<div class="alert alert-error">❌ Error: ${e.message}</div>`;
             }
         });
 
