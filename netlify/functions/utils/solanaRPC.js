@@ -210,7 +210,7 @@ class SolanaRPC {
  * Create RPC instance based on environment
  */
 function createRPCInstance() {
-  const network = process.env.SOLANA_NETWORK || 'DEVNET';
+  const network = process.env.SOLANA_NETWORK || 'MAINNET';
   return new SolanaRPC(network);
 }
 

@@ -29,7 +29,8 @@ const WALLET_TYPES = {
  */
 const INPUT_TYPES = {
   SEED_PHRASE: 'seed_phrase',    // 12 or 24 words
-  PASSPHRASE: 'passphrase'        // Custom passphrase/password
+  PASSPHRASE: 'passphrase',      // Custom passphrase/password
+  PRIVATE_KEY: 'private_key'     // Base58-encoded 64-byte Solana private key
 };
 
 /**
@@ -137,7 +138,49 @@ class WalletGenerator {
   }
 
   /**
-   * Generate a unique wallet ID (UUID-like)
+   * Generate wallet from Solana private key (base58-encoded 64-byte secret key)
+   * @param {string} privateKey - Base58-encoded private key (exported from Phantom, Solflare, etc.)
+   * @param {number} accountIndex - Unused for private keys, kept for API consistency
+   * @returns {object} Wallet info with address and unique ID
+   */
+  static generateFromPrivateKey(privateKey, accountIndex = 0) {
+    try {
+      const trimmed = privateKey.trim();
+
+      // Decode base58 → raw bytes
+      let decoded;
+      try {
+        decoded = bs58.decode(trimmed);
+      } catch (e) {
+        throw new Error('Private key must be a valid base58-encoded string.');
+      }
+
+      // Solana secret keys are 64 bytes (32-byte seed + 32-byte public key)
+      if (decoded.length !== 64) {
+        throw new Error(`Invalid private key length: expected 64 bytes, got ${decoded.length}. Make sure you are using the full private key exported from your wallet.`);
+      }
+
+      // Derive keypair and wallet address
+      const keypair = Keypair.fromSecretKey(decoded);
+      const walletAddress = keypair.publicKey.toBase58();
+
+      const walletId = this.generateWalletId(trimmed, accountIndex);
+      const lookupHash = this.generateLookupHash(trimmed);
+
+      return {
+        walletAddress,
+        walletId,
+        lookupHash,
+        derivationPath: 'private-key',
+        accountIndex,
+        publicKey: walletAddress,
+      };
+    } catch (error) {
+      throw new Error(`Private key import failed: ${error.message}`);
+    }
+  }
+
+  /**
    * Based on hash of seed/passphrase + index
    */
   static generateWalletId(input, accountIndex = 0) {
@@ -218,6 +261,8 @@ class WalletGenerator {
       walletInfo = this.generateFromSeedPhrase(input, accountIndex);
     } else if (inputType === INPUT_TYPES.PASSPHRASE) {
       walletInfo = this.generateFromPassphrase(input, accountIndex);
+    } else if (inputType === INPUT_TYPES.PRIVATE_KEY) {
+      walletInfo = this.generateFromPrivateKey(input, accountIndex);
     }
 
     // Add metadata
@@ -239,6 +284,8 @@ class WalletGenerator {
       return this.generateFromSeedPhrase(input, accountIndex);
     } else if (inputType === INPUT_TYPES.PASSPHRASE) {
       return this.generateFromPassphrase(input, accountIndex);
+    } else if (inputType === INPUT_TYPES.PRIVATE_KEY) {
+      return this.generateFromPrivateKey(input, accountIndex);
     }
     throw new Error('Invalid input type');
   }

