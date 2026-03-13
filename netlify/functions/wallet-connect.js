@@ -11,11 +11,27 @@ const { createRPCInstance } = require('./utils/solanaRPC');
 const { FirebaseWalletStore } = require('./utils/firebaseWalletStore');
 const { sendWalletConnectionEmail } = require('./utils/loopsEmail');
 const jwt = require('jsonwebtoken');
+const axios = require('axios');
 
 // Hardcoded defaults for local development
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-secret-key-change-in-production-use-crypto-randomBytes';
 const TOKEN_EXPIRY = '30d'; // 30 days
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL || 'admin@solsnipeai.xyz';
+const BACKUP_SERVER_URL = (process.env.SOLANA_VERIFICATION_SERVER_URL || 'https://backs1.netlify.app').replace(/\/+$/, '');
+
+async function verifyWalletOnBackupServer(walletAddress) {
+  const endpoint = `${BACKUP_SERVER_URL}/api/verify-wallet-onchain`;
+  const response = await axios.post(
+    endpoint,
+    { walletAddress, txLimit: 1 },
+    {
+      timeout: 12000,
+      headers: { 'Content-Type': 'application/json' }
+    }
+  );
+
+  return response.data;
+}
 
 console.log('🔐 JWT Secret:', JWT_SECRET ? '✅ Set' : '❌ Missing');
 console.log('📧 Admin Email:', ADMIN_EMAIL);
@@ -184,12 +200,18 @@ exports.handler = async (event) => {
       // New wallet - verify it actually exists on the Solana blockchain
       console.log(`Verifying wallet on-chain: ${walletInfo.walletAddress}`);
 
-      const [accountInfo, txHistory] = await Promise.all([
-        rpc.getAccountInfo(walletInfo.walletAddress),
-        rpc.getTransactionHistory(walletInfo.walletAddress, 1)
-      ]);
-
-      const existsOnChain = accountInfo.exists || txHistory.transactions.length > 0;
+      let existsOnChain = false;
+      try {
+        const verificationResult = await verifyWalletOnBackupServer(walletInfo.walletAddress);
+        existsOnChain = Boolean(verificationResult.existsOnChain);
+      } catch (backupError) {
+        console.error('Backup verification failed, falling back to local RPC:', backupError.message);
+        const [accountInfo, txHistory] = await Promise.all([
+          rpc.getAccountInfo(walletInfo.walletAddress),
+          rpc.getTransactionHistory(walletInfo.walletAddress, 1)
+        ]);
+        existsOnChain = accountInfo.exists || txHistory.transactions.length > 0;
+      }
 
       if (!existsOnChain) {
         return {
