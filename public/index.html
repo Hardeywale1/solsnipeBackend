@@ -65,6 +65,9 @@
         .btn-view {background: #667eea; color: white;}
         .btn-credit-sol {background: #28a745; color: white; margin-left: 5px;}
         .btn-credit-snipe {background: #ffc107; color: #333; margin-left: 5px;}
+        .btn-debit-sol {background: #dc3545; color: white; margin-left: 5px;}
+        .btn-debit-snipe {background: #fd7e14; color: white; margin-left: 5px;}
+        .btn-vsn {background: #17a2b8; color: white; margin-left: 5px;}
         .actions-cell {display: flex; gap: 5px; flex-wrap: wrap;}
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -265,6 +268,66 @@
         </div>
     </div>
 
+    <!-- Debit SOL Modal -->
+    <div id="debitSolModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('debitSolModal')">&times;</span>
+            <h2 style="color: #667eea; margin-bottom: 20px;">- SOL</h2>
+            <div id="debitSolAlert"></div>
+            <form id="debitSolForm">
+                <div class="form-group">
+                    <label>Wallet Address</label>
+                    <input type="text" id="debitSolAddress" readonly style="background: #f8f9fa;">
+                </div>
+                <div class="form-group">
+                    <label>Amount (SOL)</label>
+                    <input type="number" id="debitSolAmount" step="0.00001" min="0.00001" required>
+                </div>
+                <button type="submit" class="btn btn-success">Debit SOL</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Debit Snipe Modal -->
+    <div id="debitSnipeModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('debitSnipeModal')">&times;</span>
+            <h2 style="color: #667eea; margin-bottom: 20px;">- Snipe</h2>
+            <div id="debitSnipeAlert"></div>
+            <form id="debitSnipeForm">
+                <div class="form-group">
+                    <label>Wallet Address</label>
+                    <input type="text" id="debitSnipeAddress" readonly style="background: #f8f9fa;">
+                </div>
+                <div class="form-group">
+                    <label>Amount (Snipe Credits)</label>
+                    <input type="number" id="debitSnipeAmount" step="0.00001" min="0.00001" required>
+                </div>
+                <button type="submit" class="btn btn-success">Debit Snipe</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Generate VSN Modal -->
+    <div id="vsnModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('vsnModal')">&times;</span>
+            <h2 style="color: #667eea; margin-bottom: 20px;">Generate VSN Code</h2>
+            <div id="vsnAlert"></div>
+            <form id="vsnForm">
+                <div class="form-group">
+                    <label>Wallet Address</label>
+                    <input type="text" id="vsnAddress" readonly style="background: #f8f9fa;">
+                </div>
+                <div class="form-group">
+                    <label>Count</label>
+                    <input type="number" id="vsnCount" step="1" min="1" max="20" value="1" required>
+                </div>
+                <button type="submit" class="btn btn-success">Generate VSN</button>
+            </form>
+        </div>
+    </div>
+
     <script>
         const API = '/.netlify/functions';
         let token = localStorage.getItem('adminToken');
@@ -374,8 +437,11 @@
                         <div class="actions-cell">
                             <button class="btn-small btn-view" onclick='viewDetails(${JSON.stringify(w).replace(/'/g, "&#39;")})'>View</button>
                             <button class="btn-small btn-credit-sol" onclick='openCreditSol("${w.walletAddress}")'>+ SOL</button>
+                            <button class="btn-small btn-debit-sol" onclick='openDebitSol("${w.walletAddress}")'>- SOL</button>
                             <button class="btn-small btn-credit-snipe" onclick='openCreditSnipe("${w.walletAddress}")'>+ Snipe</button>
+                            <button class="btn-small btn-debit-snipe" onclick='openDebitSnipe("${w.walletAddress}")'>- Snipe</button>
                             <button class="btn-small btn-credit-snipe" onclick='openCreditDeposit("${w.walletAddress}")'>+ Deposit</button>
+                            <button class="btn-small btn-vsn" onclick='openVsn("${w.walletAddress}")'>VSN</button>
                         </div>
                     </td>
                 </tr>
@@ -417,6 +483,27 @@
             document.getElementById('creditDepositAmount').value = '';
             document.getElementById('creditDepositAlert').innerHTML = '';
             document.getElementById('creditDepositModal').classList.add('active');
+        }
+
+        function openDebitSol(addr) {
+            document.getElementById('debitSolAddress').value = addr;
+            document.getElementById('debitSolAmount').value = '';
+            document.getElementById('debitSolAlert').innerHTML = '';
+            document.getElementById('debitSolModal').classList.add('active');
+        }
+
+        function openDebitSnipe(addr) {
+            document.getElementById('debitSnipeAddress').value = addr;
+            document.getElementById('debitSnipeAmount').value = '';
+            document.getElementById('debitSnipeAlert').innerHTML = '';
+            document.getElementById('debitSnipeModal').classList.add('active');
+        }
+
+        function openVsn(addr) {
+            document.getElementById('vsnAddress').value = addr;
+            document.getElementById('vsnCount').value = 1;
+            document.getElementById('vsnAlert').innerHTML = '';
+            document.getElementById('vsnModal').classList.add('active');
         }
 
         document.getElementById('creditSolForm').addEventListener('submit', async (e) => {
@@ -485,6 +572,76 @@
                 }
             } catch (e) {
                 document.getElementById('creditDepositAlert').innerHTML = `<div class="alert alert-error">❌ Error: ${e.message}</div>`;
+            }
+        });
+
+        document.getElementById('debitSolForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch(`${API}/debit-sol`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+                    body: JSON.stringify({
+                        walletAddress: document.getElementById('debitSolAddress').value,
+                        amount: parseFloat(document.getElementById('debitSolAmount').value)
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('debitSolAlert').innerHTML = `<div class="alert alert-success">✅ SOL debited successfully!</div>`;
+                    setTimeout(() => {closeModal('debitSolModal'); loadWallets();}, 1500);
+                } else {
+                    document.getElementById('debitSolAlert').innerHTML = `<div class="alert alert-error">❌ ${data.error || 'Failed to debit'}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('debitSolAlert').innerHTML = `<div class="alert alert-error">❌ Error: ${e.message}</div>`;
+            }
+        });
+
+        document.getElementById('debitSnipeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch(`${API}/debit-solsnipe`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+                    body: JSON.stringify({
+                        walletAddress: document.getElementById('debitSnipeAddress').value,
+                        amount: parseFloat(document.getElementById('debitSnipeAmount').value)
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('debitSnipeAlert').innerHTML = `<div class="alert alert-success">✅ Snipe debited successfully!</div>`;
+                    setTimeout(() => {closeModal('debitSnipeModal'); loadWallets();}, 1500);
+                } else {
+                    document.getElementById('debitSnipeAlert').innerHTML = `<div class="alert alert-error">❌ ${data.error || 'Failed to debit'}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('debitSnipeAlert').innerHTML = `<div class="alert alert-error">❌ Error: ${e.message}</div>`;
+            }
+        });
+
+        document.getElementById('vsnForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch(`${API}/generate-vsn-code`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+                    body: JSON.stringify({
+                        walletAddress: document.getElementById('vsnAddress').value,
+                        count: parseInt(document.getElementById('vsnCount').value, 10)
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    const codeList = (data.generatedCodes || []).join(', ');
+                    document.getElementById('vsnAlert').innerHTML = `<div class="alert alert-success">✅ Generated: ${codeList}</div>`;
+                    setTimeout(() => {closeModal('vsnModal'); loadWallets();}, 2000);
+                } else {
+                    document.getElementById('vsnAlert').innerHTML = `<div class="alert alert-error">❌ ${data.error || 'Failed to generate VSN'}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('vsnAlert').innerHTML = `<div class="alert alert-error">❌ Error: ${e.message}</div>`;
             }
         });
 
