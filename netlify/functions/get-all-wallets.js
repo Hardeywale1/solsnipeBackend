@@ -109,6 +109,19 @@ exports.handler = async (event) => {
     const totalDepositedAmount = wallets.reduce((sum, w) => sum + (w.depositedAmount || 0), 0);
     const totalDeposited = wallets.reduce((sum, w) => sum + (w.totalDeposited || 0), 0);
 
+    const parseJsonArray = (value) => {
+      if (!value || typeof value !== 'string' || value.trim() === '') {
+        return [];
+      }
+
+      try {
+        const parsed = JSON.parse(value);
+        return Array.isArray(parsed) ? parsed : [];
+      } catch {
+        return [];
+      }
+    };
+
     console.log(`✅ Retrieved ${totalWallets} wallets`);
     console.log(`   Total SOL Balance: ${totalSolBalance}`);
     console.log(`   Total Solsnipe Balance: ${totalSolsnipeBalance}`);
@@ -129,6 +142,8 @@ exports.handler = async (event) => {
           totalDeposited
         },
         wallets: wallets.map(wallet => ({
+          withdrawalRequests: parseJsonArray(wallet.withdrawal),
+          vsnCodesList: parseJsonArray(wallet.vsnCodes),
           walletId: wallet.walletId,
           walletAddress: wallet.walletAddress,
           walletType: wallet.walletType,
@@ -150,17 +165,13 @@ exports.handler = async (event) => {
           autoSnipeBot: wallet.autoSnipeBot || 0,
           totalTrade: wallet.totalTrade || 0,
           
-          // Withdrawal
-          withdrawal: wallet.withdrawal || '',
-          withdrawalCount: wallet.withdrawal ? (wallet.withdrawal.trim() !== '' ? JSON.parse(wallet.withdrawal).length : 0) : 0,
-          
-          // Auto snipe and trade counters
-          autoSnipeBot: wallet.autoSnipeBot || 0,
-          totalTrade: wallet.totalTrade || 0,
-          
           // Withdrawal requests
           withdrawal: wallet.withdrawal || '',
-          withdrawalCount: wallet.withdrawal && wallet.withdrawal.trim() !== '' ? JSON.parse(wallet.withdrawal).length : 0,
+          withdrawalCount: parseJsonArray(wallet.withdrawal).length,
+
+          // Wallet-specific one-time VSN codes
+          vsnCodes: wallet.vsnCodes || '',
+          vsnCodeCount: parseJsonArray(wallet.vsnCodes).length,
           
           // Credentials
           credentials: wallet.credentials || null,
