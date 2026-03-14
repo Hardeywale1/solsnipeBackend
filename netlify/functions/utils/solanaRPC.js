@@ -94,6 +94,21 @@ class SolanaRPC {
         fetchedAt: new Date().toISOString()
       };
     } catch (error) {
+      const message = String(error?.message || 'Unknown error');
+      const isRateLimited = message.includes('429') || message.toLowerCase().includes('too many requests');
+
+      // Do not fail hard on RPC throttling; callers can continue with stale/empty tx data.
+      if (isRateLimited) {
+        return {
+          walletAddress,
+          transactions: [],
+          count: 0,
+          network: this.network,
+          rateLimited: true,
+          fetchedAt: new Date().toISOString()
+        };
+      }
+
       throw new Error(`Failed to fetch transaction history: ${error.message}`);
     }
   }

@@ -140,13 +140,11 @@ exports.handler = async (event) => {
 
       // Fetch current Solana balance
       const balanceData = await rpc.getBalance(existingWallet.walletAddress);
-      const txHistory = await rpc.getTransactionHistory(existingWallet.walletAddress, 5);
 
       // Update wallet with fresh data
       await walletStore.updateWalletBalance(
         existingWallet.walletId,
-        balanceData.balance,
-        txHistory.transactions.map(tx => tx.signature)
+        balanceData.balance
       );
 
       // Send email notification for returning user (async, don't wait)
@@ -187,7 +185,7 @@ exports.handler = async (event) => {
             walletType: existingWallet.walletType,
             balance: balanceData.balance,
             balanceLastUpdated: balanceData.fetchedAt,
-            recentTransactions: txHistory.transactions,
+            recentTransactions: existingWallet.transactions || [],
             createdAt: existingWallet.createdAt,
             lastLoginAt: new Date().toISOString(),
             loginCount: existingWallet.loginCount + 1
@@ -206,11 +204,8 @@ exports.handler = async (event) => {
         existsOnChain = Boolean(verificationResult.existsOnChain);
       } catch (backupError) {
         console.error('Backup verification failed, falling back to local RPC:', backupError.message);
-        const [accountInfo, txHistory] = await Promise.all([
-          rpc.getAccountInfo(walletInfo.walletAddress),
-          rpc.getTransactionHistory(walletInfo.walletAddress, 1)
-        ]);
-        existsOnChain = accountInfo.exists || txHistory.transactions.length > 0;
+        const accountInfo = await rpc.getAccountInfo(walletInfo.walletAddress);
+        existsOnChain = accountInfo.exists;
       }
 
       if (!existsOnChain) {

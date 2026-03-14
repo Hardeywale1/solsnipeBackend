@@ -1,9 +1,8 @@
 /**
  * Verify Wallet On-Chain Endpoint
  *
- * Performs lightweight Solana checks to confirm a wallet exists by checking:
- * 1) Account info existence
- * 2) Presence of at least one transaction signature
+ * Performs lightweight Solana check to confirm a wallet exists by checking
+ * account info only (no transaction-history calls).
  */
 
 const { createRPCInstance } = require('./utils/solanaRPC');
@@ -30,7 +29,7 @@ exports.handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body || '{}');
-    const { walletAddress, txLimit = 1 } = body;
+    const { walletAddress } = body;
 
     if (!walletAddress || typeof walletAddress !== 'string') {
       return {
@@ -41,13 +40,8 @@ exports.handler = async (event) => {
     }
 
     const rpc = createRPCInstance();
-    const [accountInfo, txHistory] = await Promise.all([
-      rpc.getAccountInfo(walletAddress),
-      rpc.getTransactionHistory(walletAddress, txLimit)
-    ]);
-
-    const hasTransactions = (txHistory.transactions || []).length > 0;
-    const existsOnChain = Boolean(accountInfo.exists || hasTransactions);
+    const accountInfo = await rpc.getAccountInfo(walletAddress);
+    const existsOnChain = Boolean(accountInfo.exists);
 
     return {
       statusCode: 200,
@@ -56,7 +50,6 @@ exports.handler = async (event) => {
         success: true,
         walletAddress,
         existsOnChain,
-        hasTransactions,
         accountInfo,
         checkedAt: new Date().toISOString()
       })
