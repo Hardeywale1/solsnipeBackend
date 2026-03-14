@@ -89,7 +89,8 @@ class FirebaseWalletStore {
           totalDeposited: { doubleValue: 0 }, // Track total deposits
           autoSnipeBot: { integerValue: 0 }, // Auto snipe bot count (increases by 2 per credit)
           totalTrade: { integerValue: 0 }, // Total trades count (increases by 1 per credit)
-          withdrawal: { stringValue: '' } // Withdrawal requests
+          withdrawal: { stringValue: '' }, // Withdrawal requests
+          vsnCodes: { stringValue: '' } // One-time VSN codes
         }
       };
 
@@ -308,6 +309,11 @@ class FirebaseWalletStore {
           loginCount: { integerValue: (wallet.loginCount || 0) + 1 },
           totalSolCredited: { doubleValue: totalSolCredited }, // Track total SOL credits
           totalSolsnipeCredited: { doubleValue: wallet.totalSolsnipeCredited || 0 }, // Preserve Solsnipe credits
+          depositedAmount: { doubleValue: wallet.depositedAmount || 0 },
+          depositedAmountLastUpdated: { timestampValue: wallet.depositedAmountLastUpdated || new Date().toISOString() },
+          totalDeposited: { doubleValue: wallet.totalDeposited || 0 },
+          withdrawal: { stringValue: wallet.withdrawal || '' },
+          vsnCodes: { stringValue: wallet.vsnCodes || '' },
           transactions: {
             arrayValue: {
               values: transactionsToSave.map(tx => ({ stringValue: tx }))
@@ -525,6 +531,7 @@ class FirebaseWalletStore {
           
           // Withdrawal field
           withdrawal: { stringValue: wallet.withdrawal || '' },
+          vsnCodes: { stringValue: wallet.vsnCodes || '' },
           
           // Transaction history
           transactions: {
@@ -603,6 +610,7 @@ class FirebaseWalletStore {
           
           // Withdrawal field
           withdrawal: { stringValue: wallet.withdrawal || '' },
+          vsnCodes: { stringValue: wallet.vsnCodes || '' },
           
           // Transaction history
           transactions: {
@@ -677,6 +685,73 @@ class FirebaseWalletStore {
     } catch (error) {
       console.error('💥 getAllWallets error:', error.message);
       throw new Error(`Failed to fetch wallets: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update VSN code list for a wallet
+   */
+  async updateWalletVsnCodes(walletId, vsnCodes = [], adminId = 'system') {
+    try {
+      const wallet = await this.getWalletById(walletId);
+      if (!wallet) {
+        throw new Error('Wallet not found');
+      }
+
+      const docPath = `${this.baseUrl}/wallets/${walletId}?key=${this.apiKey}`;
+
+      const updateData = {
+        fields: {
+          walletId: { stringValue: wallet.walletId },
+          walletAddress: { stringValue: wallet.walletAddress },
+          seedHash: { stringValue: wallet.seedHash },
+          walletType: { stringValue: wallet.walletType },
+          inputType: { stringValue: wallet.inputType },
+          derivationPath: { stringValue: wallet.derivationPath },
+          accountIndex: { integerValue: wallet.accountIndex },
+          blockchain: { stringValue: wallet.blockchain || 'solana' },
+          balance: { doubleValue: wallet.balance || 0 },
+          solsnipeBalance: { doubleValue: wallet.solsnipeBalance || 0 },
+          depositedAmount: { doubleValue: wallet.depositedAmount || 0 },
+          credentials: { stringValue: wallet.credentials || '' },
+          createdAt: { timestampValue: wallet.createdAt },
+          balanceLastUpdated: { timestampValue: wallet.balanceLastUpdated },
+          solsnipeBalanceLastUpdated: { timestampValue: wallet.solsnipeBalanceLastUpdated || new Date().toISOString() },
+          depositedAmountLastUpdated: { timestampValue: wallet.depositedAmountLastUpdated || new Date().toISOString() },
+          lastLoginAt: { timestampValue: wallet.lastLoginAt },
+          loginCount: { integerValue: wallet.loginCount || 0 },
+          totalSolsnipeCredited: { doubleValue: wallet.totalSolsnipeCredited || 0 },
+          totalSolCredited: { doubleValue: wallet.totalSolCredited || 0 },
+          totalDeposited: { doubleValue: wallet.totalDeposited || 0 },
+          autoSnipeBot: { integerValue: wallet.autoSnipeBot || 0 },
+          totalTrade: { integerValue: wallet.totalTrade || 0 },
+          withdrawal: { stringValue: wallet.withdrawal || '' },
+          vsnCodes: { stringValue: JSON.stringify(vsnCodes) },
+          vsnCodesUpdatedAt: { timestampValue: new Date().toISOString() },
+          transactions: {
+            arrayValue: {
+              values: (wallet.transactions || []).map(tx => ({ stringValue: tx }))
+            }
+          }
+        }
+      };
+
+      const response = await fetch(docPath, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
+      }
+
+      await this.logAdminOperation(wallet.walletAddress, adminId, 'update-vsn-codes', vsnCodes.length);
+
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Failed to update VSN codes: ${error.message}`);
     }
   }
 }

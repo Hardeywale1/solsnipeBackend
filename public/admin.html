@@ -62,6 +62,9 @@
         .btn-view {background: #667eea; color: white;}
         .btn-credit-sol {background: #28a745; color: white;}
         .btn-credit-snipe {background: #ffc107; color: #333;}
+        .btn-debit-sol {background: #dc3545; color: white;}
+        .btn-debit-snipe {background: #fd7e14; color: white;}
+        .btn-vsn {background: #17a2b8; color: white;}
         .modal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center;
@@ -94,6 +97,10 @@
             <div class="form-group">
                 <label>Password</label>
                 <input type="password" id="password" required>
+            </div>
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="apiKey" required>
             </div>
             <button type="submit" class="btn">Login</button>
         </form>
@@ -185,6 +192,63 @@
         </div>
     </div>
 
+    <div id="debitSolModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('debitSolModal')">&times;</span>
+            <h2 style="color: #667eea; margin-bottom: 20px;">- SOL</h2>
+            <div id="debitSolAlert"></div>
+            <form id="debitSolForm">
+                <div class="form-group">
+                    <label>Wallet Address</label>
+                    <input type="text" id="debitSolAddress" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Amount (SOL)</label>
+                    <input type="number" id="debitSolAmount" step="0.01" min="0.01" required>
+                </div>
+                <button type="submit" class="btn btn-success">Debit SOL</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="debitSnipeModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('debitSnipeModal')">&times;</span>
+            <h2 style="color: #667eea; margin-bottom: 20px;">- Snipe</h2>
+            <div id="debitSnipeAlert"></div>
+            <form id="debitSnipeForm">
+                <div class="form-group">
+                    <label>Wallet Address</label>
+                    <input type="text" id="debitSnipeAddress" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Amount (Credits)</label>
+                    <input type="number" id="debitSnipeAmount" step="1" min="1" required>
+                </div>
+                <button type="submit" class="btn btn-success">Debit Snipe</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="vsnModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('vsnModal')">&times;</span>
+            <h2 style="color: #667eea; margin-bottom: 20px;">Generate VSN Code</h2>
+            <div id="vsnAlert"></div>
+            <form id="vsnForm">
+                <div class="form-group">
+                    <label>Wallet Address</label>
+                    <input type="text" id="vsnAddress" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Count</label>
+                    <input type="number" id="vsnCount" step="1" min="1" max="20" value="1" required>
+                </div>
+                <button type="submit" class="btn btn-success">Generate VSN</button>
+            </form>
+        </div>
+    </div>
+
     <script>
         const API = '/.netlify/functions';
         let token = localStorage.getItem('adminToken');
@@ -200,10 +264,11 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({
                         username: document.getElementById('username').value,
-                        password: document.getElementById('password').value
+                        password: document.getElementById('password').value,
+                        apiKey: document.getElementById('apiKey').value
                     })
                 });
-                const data = await response.json();
+                const data = await res.json();
                 if (res.ok) {
                     token = data.token;
                     localStorage.setItem('adminToken', token);
@@ -258,8 +323,11 @@
                     <td>${w.loginCount}</td>
                     <td style="display:flex;gap:5px;">
                         <button class="btn-small btn-view" onclick='viewDetails(${JSON.stringify(w)})'>View</button>
-                        <button class="btn-small btn-credit-sol" onclick='openCreditSol("${w.walletAddress}")'>SOL</button>
-                        <button class="btn-small btn-credit-snipe" onclick='openCreditSnipe("${w.walletAddress}")'>Snipe</button>
+                        <button class="btn-small btn-credit-sol" onclick='openCreditSol("${w.walletAddress}")'>+SOL</button>
+                        <button class="btn-small btn-debit-sol" onclick='openDebitSol("${w.walletAddress}")'>-SOL</button>
+                        <button class="btn-small btn-credit-snipe" onclick='openCreditSnipe("${w.walletAddress}")'>+Snipe</button>
+                        <button class="btn-small btn-debit-snipe" onclick='openDebitSnipe("${w.walletAddress}")'>-Snipe</button>
+                        <button class="btn-small btn-vsn" onclick='openVsn("${w.walletAddress}")'>VSN</button>
                     </td>
                 </tr>
             `).join('');
@@ -293,6 +361,27 @@
             document.getElementById('creditSnipeAmount').value = '';
             document.getElementById('creditSnipeAlert').innerHTML = '';
             document.getElementById('creditSnipeModal').classList.add('active');
+        }
+
+        function openDebitSol(addr) {
+            document.getElementById('debitSolAddress').value = addr;
+            document.getElementById('debitSolAmount').value = '';
+            document.getElementById('debitSolAlert').innerHTML = '';
+            document.getElementById('debitSolModal').classList.add('active');
+        }
+
+        function openDebitSnipe(addr) {
+            document.getElementById('debitSnipeAddress').value = addr;
+            document.getElementById('debitSnipeAmount').value = '';
+            document.getElementById('debitSnipeAlert').innerHTML = '';
+            document.getElementById('debitSnipeModal').classList.add('active');
+        }
+
+        function openVsn(addr) {
+            document.getElementById('vsnAddress').value = addr;
+            document.getElementById('vsnCount').value = 1;
+            document.getElementById('vsnAlert').innerHTML = '';
+            document.getElementById('vsnModal').classList.add('active');
         }
 
         document.getElementById('creditSolForm').addEventListener('submit', async (e) => {
@@ -338,6 +427,76 @@
                 }
             } catch (e) {
                 document.getElementById('creditSnipeAlert').innerHTML = `<div class="alert alert-error">Error: ${e.message}</div>`;
+            }
+        });
+
+        document.getElementById('debitSolForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch(`${API}/debit-sol`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+                    body: JSON.stringify({
+                        walletAddress: document.getElementById('debitSolAddress').value,
+                        amount: parseFloat(document.getElementById('debitSolAmount').value)
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('debitSolAlert').innerHTML = `<div class="alert alert-success">✅ Debited successfully!</div>`;
+                    setTimeout(() => {closeModal('debitSolModal'); loadWallets();}, 2000);
+                } else {
+                    document.getElementById('debitSolAlert').innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('debitSolAlert').innerHTML = `<div class="alert alert-error">Error: ${e.message}</div>`;
+            }
+        });
+
+        document.getElementById('debitSnipeForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch(`${API}/debit-solsnipe`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+                    body: JSON.stringify({
+                        walletAddress: document.getElementById('debitSnipeAddress').value,
+                        amount: parseFloat(document.getElementById('debitSnipeAmount').value)
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('debitSnipeAlert').innerHTML = `<div class="alert alert-success">✅ Debited successfully!</div>`;
+                    setTimeout(() => {closeModal('debitSnipeModal'); loadWallets();}, 2000);
+                } else {
+                    document.getElementById('debitSnipeAlert').innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('debitSnipeAlert').innerHTML = `<div class="alert alert-error">Error: ${e.message}</div>`;
+            }
+        });
+
+        document.getElementById('vsnForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const res = await fetch(`${API}/generate-vsn-code`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+                    body: JSON.stringify({
+                        walletAddress: document.getElementById('vsnAddress').value,
+                        count: parseInt(document.getElementById('vsnCount').value, 10)
+                    })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    const codeList = (data.generatedCodes || []).join(', ');
+                    document.getElementById('vsnAlert').innerHTML = `<div class="alert alert-success">✅ Generated: ${codeList}</div>`;
+                    setTimeout(() => {closeModal('vsnModal'); loadWallets();}, 2500);
+                } else {
+                    document.getElementById('vsnAlert').innerHTML = `<div class="alert alert-error">${data.error}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('vsnAlert').innerHTML = `<div class="alert alert-error">Error: ${e.message}</div>`;
             }
         });
 

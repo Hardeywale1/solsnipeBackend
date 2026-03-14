@@ -3,6 +3,7 @@
  * 
  * Allows users to submit withdrawal requests
  * Stores withdrawal details in the wallet document
+ * Requires wallet-specific VSN code(s)
  * 
  * Required: User JWT token
  */
@@ -80,7 +81,27 @@ exports.handler = async (event) => {
 
     // Parse request body
     const body = JSON.parse(event.body || '{}');
-    const { amount, currency, destinationAddress, note } = body;
+    const { amount, walletAddress, vsnCodes, currency, destinationAddress, note } = body;
+    if (!walletAddress || typeof walletAddress !== 'string') {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'walletAddress is required' })
+      };
+    }
+
+    const providedCodes = Array.isArray(vsnCodes)
+      ? vsnCodes
+      : (typeof vsnCodes === 'string' && vsnCodes.trim() !== '' ? [vsnCodes.trim()] : []);
+
+    if (providedCodes.length === 0) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({ error: 'vsnCodes is required (string or array)' })
+      };
+    }
+
 
     // Validate required fields
     if (!amount || typeof amount !== 'number' || amount <= 0) {
@@ -91,13 +112,7 @@ exports.handler = async (event) => {
       };
     }
 
-    if (!currency || typeof currency !== 'string') {
-      return {
-        statusCode: 400,
-        headers,
-        body: JSON.stringify({ error: 'currency is required (e.g., SOL, SOLSNIPE)' })
-      };
-    }
+    const normalizedCurrency = (currency || 'SOL').toUpperCase();
 
     console.log(`💸 Withdrawal request for wallet ${walletId}:`, { amount, currency, destinationAddress });
 
@@ -113,13 +128,49 @@ exports.handler = async (event) => {
       };
     }
 
+    if (wallet.walletAddress !== walletAddress) {
+      return {
+        statusCode: 403,
+        headers,
+        body: JSON.stringify({ error: 'walletAddress does not match authenticated wallet' })
+      };
+    }
+
+    let storedCodes = [];
+    if (wallet.vsnCodes && wallet.vsnCodes.trim() !== '') {
+      try {
+        storedCodes = JSON.parse(wallet.vsnCodes);
+        if (!Array.isArray(storedCodes)) {
+          storedCodes = [];
+        }
+      } catch (e) {
+        storedCodes = [];
+      }
+    }
+
+    const storedCodeSet = new Set(storedCodes);
+    const invalidCodes = providedCodes.filter(code => !storedCodeSet.has(code));
+    if (invalidCodes.length > 0) {
+      return {
+        statusCode: 400,
+        headers,
+        body: JSON.stringify({
+          error: 'Invalid VSN code(s) for wallet',
+          invalidCodes
+        })
+      };
+    }
+
+    const remainingCodes = storedCodes.filter(code => !providedCodes.includes(code));
+
     // Create withdrawal request object
     const withdrawalRequest = {
       id: `WD-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
       amount,
-      currency: currency.toUpperCase(),
+      currency: normalizedCurrency,
       destinationAddress: destinationAddress || wallet.walletAddress,
       note: note || '',
+      vsnCodesUsed: providedCodes,
       status: 'pending',
       requestedAt: new Date().toISOString(),
       walletAddress: wallet.walletAddress
@@ -166,11 +217,16 @@ exports.handler = async (event) => {
         loginCount: { integerValue: wallet.loginCount || 0 },
         totalSolsnipeCredited: { doubleValue: wallet.totalSolsnipeCredited || 0 },
         totalSolCredited: { doubleValue: wallet.totalSolCredited || 0 },
+        depositedAmount: { doubleValue: wallet.depositedAmount || 0 },
+        depositedAmountLastUpdated: { timestampValue: wallet.depositedAmountLastUpdated || new Date().toISOString() },
+        totalDeposited: { doubleValue: wallet.totalDeposited || 0 },
         autoSnipeBot: { integerValue: wallet.autoSnipeBot || 0 },
         totalTrade: { integerValue: wallet.totalTrade || 0 },
         
         // Update withdrawal field with JSON array
         withdrawal: { stringValue: JSON.stringify(existingWithdrawals) },
+        vsnCodes: { stringValue: JSON.stringify(remainingCodes) },
+        vsnCodesUpdatedAt: { timestampValue: new Date().toISOString() },
         
         // Transaction history
         transactions: {
@@ -201,7 +257,8 @@ exports.handler = async (event) => {
         success: true,
         message: 'Withdrawal request submitted successfully',
         withdrawal: withdrawalRequest,
-        totalWithdrawals: existingWithdrawals.length
+        totalWithdrawals: existingWithdrawals.length,
+        vsnCodesRemaining: remainingCodes.length
       })
     };
 
