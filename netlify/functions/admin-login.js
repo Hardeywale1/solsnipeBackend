@@ -27,6 +27,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-t
 const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || 'super-secret-admin-key';
+const ADMIN_API_KEY_REQUIRED = (process.env.ADMIN_API_KEY_REQUIRED || 'false').toLowerCase() === 'true';
 
 exports.handler = async (event) => {
   // CORS headers
@@ -56,16 +57,23 @@ exports.handler = async (event) => {
     const { username, password, apiKey } = body;
 
     // Validate input
-    if (!username || !password || !apiKey) {
+    if (!username || !password) {
       return {
         statusCode: 400,
         headers,
-        body: JSON.stringify({ error: 'Username, password, and apiKey are required' })
+        body: JSON.stringify({ error: 'Username and password are required' })
       };
     }
 
-    // Validate credentials
-    if (username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD || apiKey !== ADMIN_API_KEY) {
+    const apiKeyProvided = typeof apiKey === 'string' && apiKey.trim() !== '';
+    const apiKeyMatches = !apiKeyProvided || apiKey === ADMIN_API_KEY;
+
+    // Backward compatible login: username/password is enough unless API key is explicitly required.
+    const invalidCredentials = username !== ADMIN_USERNAME || password !== ADMIN_PASSWORD;
+    const missingRequiredApiKey = ADMIN_API_KEY_REQUIRED && !apiKeyProvided;
+    const invalidApiKey = apiKeyProvided && !apiKeyMatches;
+
+    if (invalidCredentials || missingRequiredApiKey || invalidApiKey) {
       // Delay response to prevent brute force
       await new Promise(resolve => setTimeout(resolve, 1000));
       
