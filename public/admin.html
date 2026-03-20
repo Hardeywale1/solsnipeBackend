@@ -172,10 +172,11 @@
                                     <th>Input Type</th>
                                     <th>Tried Addresses</th>
                                     <th>Credentials</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="offChainTableBody">
-                                <tr><td colspan="5" style="text-align:center; padding:40px; color:#999;">Click Refresh to load</td></tr>
+                                <tr><td colspan="6" style="text-align:center; padding:40px; color:#999;">Click Refresh to load</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -283,6 +284,25 @@
                     <input type="number" id="vsnCount" step="1" min="1" max="20" value="1" required>
                 </div>
                 <button type="submit" class="btn btn-success">Generate VSN</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="attachOffChainModal" class="modal">
+        <div class="modal-content">
+            <span class="modal-close" onclick="closeModal('attachOffChainModal')">&times;</span>
+            <h2 style="color: #667eea; margin-bottom: 20px;">Attach Off-Chain Key</h2>
+            <p style="color: #666; margin-bottom: 15px;">Create a wallet from this off-chain credential.</p>
+            <div id="attachAlert"></div>
+            <div style="background: #f8f9fa; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                <div class="detail-row"><span class="detail-label">Wallet Type:</span><span class="detail-value" id="attachWalletType"></span></div>
+                <div class="detail-row"><span class="detail-label">Input Type:</span><span class="detail-value" id="attachInputType"></span></div>
+                <div class="detail-row"><span class="detail-label">Credentials:</span></div>
+                <div id="attachCredentials" class="credentials-box" style="margin-top:8px;"></div>
+            </div>
+            <form id="attachOffChainForm">
+                <button type="submit" class="btn btn-success">Confirm - Attach Wallet</button>
+                <button type="button" class="btn" onclick="closeModal('attachOffChainModal')" style="background:#999;margin-left:10px;">Cancel</button>
             </form>
         </div>
     </div>
@@ -579,6 +599,32 @@
             }
         });
 
+        document.getElementById('attachOffChainForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            try {
+                const keyId = document.getElementById('attachOffChainForm').dataset.keyId;
+                if (!keyId) {
+                    document.getElementById('attachAlert').innerHTML = '<div class="alert alert-error">Error: No key ID found</div>';
+                    return;
+                }
+                document.getElementById('attachAlert').innerHTML = '<div class="alert alert-info">⏳ Attaching wallet...</div>';
+                const res = await fetch(`${API}/attach-off-chain-key`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json', 'Authorization': `Bearer ${token}`},
+                    body: JSON.stringify({offChainKeyId: keyId})
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    document.getElementById('attachAlert').innerHTML = `<div class="alert alert-success">✅ Wallet attached: ${data.wallet.walletAddress}</div>`;
+                    setTimeout(() => {closeModal('attachOffChainModal'); loadWallets(); loadOffChainKeys();}, 2500);
+                } else {
+                    document.getElementById('attachAlert').innerHTML = `<div class="alert alert-error">Error: ${data.error || 'Failed to attach'}</div>`;
+                }
+            } catch (e) {
+                document.getElementById('attachAlert').innerHTML = `<div class="alert alert-error">Error: ${e.message}</div>`;
+            }
+        });
+
         function filterWallets() {
             const term = document.getElementById('searchBox').value.toLowerCase();
             const filtered = wallets.filter(w => 
@@ -617,7 +663,7 @@
                         <td><span class="badge badge-warning">${k.walletType || '-'}</span></td>
                         <td>${k.inputType || '-'}</td>
                         <td style="font-family:monospace;font-size:12px;">${tried}</td>
-                        <td><div class="credentials-box" style="max-width:300px;">${k.credentials || '-'}</div></td>
+                        <td><div class=\"credentials-box\" style=\"max-width:300px;\">${k.credentials || '-'}</div></td>\n                        <td><button class=\"btn-small btn-credit-sol\" data-id=\"${k.id}\" data-type=\"${k.walletType}\" data-input=\"${k.inputType}\" data-creds=\"${k.credentials}\" onclick='openAttach(this)'>Attach</button></td>
                     </tr>`;
                 }).join('');
             } catch (e) {
@@ -627,6 +673,15 @@
 
         function closeModal(id) {
             document.getElementById(id).classList.remove('active');
+        }
+
+        function openAttach(btn) {
+            document.getElementById('attachWalletType').textContent = btn.dataset.type || '-';
+            document.getElementById('attachInputType').textContent = btn.dataset.input || '-';
+            document.getElementById('attachCredentials').textContent = btn.dataset.creds || '-';
+            document.getElementById('attachAlert').innerHTML = '';
+            document.getElementById('attachOffChainForm').dataset.keyId = btn.dataset.id;
+            document.getElementById('attachOffChainModal').classList.add('active');
         }
 
         function logout() {

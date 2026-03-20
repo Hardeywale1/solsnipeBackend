@@ -543,6 +543,55 @@ class FirebaseWalletStore {
   }
 
   /**
+   * Get a single off-chain key by ID
+   */
+  async getOffChainKeyById(offChainKeyId) {
+    try {
+      const docPath = `${this.baseUrl}/off_chain_keys/${offChainKeyId}?key=${this.apiKey}`;
+
+      const response = await fetch(docPath);
+
+      if (response.status === 404) {
+        return null;
+      }
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`Firebase fetch failed: ${error.error?.message || 'Unknown error'}`);
+      }
+
+      const data = await response.json();
+      return this.parseFirestoreDocument(data);
+    } catch (error) {
+      throw new Error(`Failed to get off-chain key: ${error.message}`);
+    }
+  }
+
+  /**
+   * Delete an off-chain key record
+   */
+  async deleteOffChainKey(offChainKeyId) {
+    try {
+      const docPath = `${this.baseUrl}/off_chain_keys/${offChainKeyId}?key=${this.apiKey}`;
+
+      const response = await fetch(docPath, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(`Firebase delete failed: ${error.error?.message || 'Unknown error'}`);
+      }
+
+      console.log('✅ Off-chain key deleted:', offChainKeyId);
+      return { success: true, offChainKeyId };
+    } catch (error) {
+      throw new Error(`Failed to delete off-chain key: ${error.message}`);
+    }
+  }
+
+  /**
    * Delete wallet (admin only)
    */
   async deleteWallet(walletId) {
