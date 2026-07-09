@@ -62,7 +62,7 @@ exports.handler = async (event) => {
         statusCode: 403,
         headers,
         body: JSON.stringify({
-          error: 'Password login is disabled. Use Telegram admin login (/adminlogin in the bot).'
+          error: 'Forbidden'
         })
       };
     }

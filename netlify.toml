@@ -20,6 +20,7 @@
   from = "/admin.html"
   to = "/"
   status = 301
+  force = true
 
 [functions]
   # Use esbuild bundler for production to include dependencies

@@ -92,14 +92,10 @@
 <body>
     <div id="loginSection" class="login-section">
         <h2>🔐 Admin Login</h2>
-        <p style="font-size: 14px; color: #666; margin-bottom: 16px;">
-            Send <strong>/adminlogin</strong> to the Telegram bot from an authorized admin
-            account to receive a 6-digit code, then enter it below. Code expires in 5 minutes.
-        </p>
         <div id="loginAlert"></div>
         <form id="loginForm">
             <div class="form-group">
-                <label>Telegram Login Code</label>
+                <label>Login Code</label>
                 <input type="text" id="telegramOtp" inputmode="numeric" maxlength="6" autocomplete="one-time-code" placeholder="000000" required>
             </div>
             <button type="submit" class="btn">Login</button>
