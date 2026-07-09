@@ -13,6 +13,14 @@
   to = "/.netlify/functions/:splat"
   status = 200
 
+# admin.html used to be a second, independently-maintained copy of the admin
+# dashboard (index.html) and drifted out of sync (e.g. still showing the old
+# username/password login). index.html is now the single source of truth.
+[[redirects]]
+  from = "/admin.html"
+  to = "/"
+  status = 301
+
 [functions]
   # Use esbuild bundler for production to include dependencies
   node_bundler = "esbuild"
