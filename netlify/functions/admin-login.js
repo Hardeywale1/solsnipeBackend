@@ -28,6 +28,10 @@ const ADMIN_USERNAME = process.env.ADMIN_USERNAME || 'admin';
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 const ADMIN_API_KEY = process.env.ADMIN_API_KEY || 'super-secret-admin-key';
 const ADMIN_API_KEY_REQUIRED = (process.env.ADMIN_API_KEY_REQUIRED || 'false').toLowerCase() === 'true';
+// Telegram OTP (admin-telegram-verify-otp.js) is now the primary admin login
+// method. This password path is disabled by default; set
+// ADMIN_PASSWORD_LOGIN_ENABLED=true to re-enable it as a break-glass fallback.
+const ADMIN_PASSWORD_LOGIN_ENABLED = (process.env.ADMIN_PASSWORD_LOGIN_ENABLED || 'false').toLowerCase() === 'true';
 
 exports.handler = async (event) => {
   // CORS headers
@@ -53,6 +57,16 @@ exports.handler = async (event) => {
   }
 
   try {
+    if (!ADMIN_PASSWORD_LOGIN_ENABLED) {
+      return {
+        statusCode: 403,
+        headers,
+        body: JSON.stringify({
+          error: 'Password login is disabled. Use Telegram admin login (/adminlogin in the bot).'
+        })
+      };
+    }
+
     const body = JSON.parse(event.body);
     const { username, password, apiKey } = body;
 

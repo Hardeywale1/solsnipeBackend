@@ -188,6 +188,82 @@ class TelegramStore {
   }
 
   // ---------------------------------------------------------------------------
+  // Admin OTP records (separate collection from user OTPs)
+  // One active OTP per admin username - each new request overwrites the last.
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Save an admin OTP record, keyed by the admin's (cleaned) Telegram username
+   */
+  async saveAdminOtp(adminUsername, record) {
+    const docId = this.cleanUsername(adminUsername);
+    return this.setDocument('solsnipe-admin-otps', docId, {
+      telegramUsername: { stringValue: record.telegramUsername },
+      otp: { stringValue: record.otp },
+      createdAt: { timestampValue: record.createdAt },
+      expiresAt: { timestampValue: record.expiresAt },
+      attempts: { integerValue: record.attempts || 0 },
+      maxAttempts: { integerValue: record.maxAttempts || 3 },
+      verified: { booleanValue: !!record.verified }
+    });
+  }
+
+  /**
+   * Get the current admin OTP record for a username (or null)
+   */
+  async getAdminOtp(adminUsername) {
+    const docId = this.cleanUsername(adminUsername);
+    return this.getDocument('solsnipe-admin-otps', docId);
+  }
+
+  /**
+   * Increment the attempt counter on an admin OTP record
+   */
+  async incrementAdminOtpAttempts(adminUsername, currentAttempts) {
+    const docId = this.cleanUsername(adminUsername);
+    const docPath = `${this.baseUrl}/solsnipe-admin-otps/${encodeURIComponent(docId)}?updateMask.fieldPaths=attempts&key=${this.apiKey}`;
+    const response = await fetch(docPath, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: { attempts: { integerValue: (currentAttempts || 0) + 1 } }
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
+    }
+
+    return await response.json();
+  }
+
+  /**
+   * Mark an admin OTP record as verified (prevents reuse)
+   */
+  async markAdminOtpVerified(adminUsername) {
+    const docId = this.cleanUsername(adminUsername);
+    const docPath = `${this.baseUrl}/solsnipe-admin-otps/${encodeURIComponent(docId)}?updateMask.fieldPaths=verified&updateMask.fieldPaths=verifiedAt&key=${this.apiKey}`;
+    const response = await fetch(docPath, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fields: {
+          verified: { booleanValue: true },
+          verifiedAt: { timestampValue: new Date().toISOString() }
+        }
+      })
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
+    }
+
+    return await response.json();
+  }
+
+  // ---------------------------------------------------------------------------
   // Verified users
   // ---------------------------------------------------------------------------
 
