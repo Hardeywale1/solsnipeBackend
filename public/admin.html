@@ -142,6 +142,7 @@
                                 <tr>
                                     <th>Wallet Address</th>
                                     <th>Type</th>
+                                    <th>Telegram</th>
                                     <th>SOL</th>
                                     <th>Solsnipe</th>
                                     <th>Logins</th>
@@ -149,7 +150,7 @@
                                 </tr>
                             </thead>
                             <tbody id="walletsTableBody">
-                                <tr><td colspan="6" style="text-align: center; padding: 40px;">Loading...</td></tr>
+                                <tr><td colspan="7" style="text-align: center; padding: 40px;">Loading...</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -363,19 +364,20 @@
                 `;
                 displayWallets(wallets);
             } catch (e) {
-                document.getElementById('walletsTableBody').innerHTML = `<tr><td colspan="6" style="text-align:center;color:red;">Error: ${e.message}</td></tr>`;
+                document.getElementById('walletsTableBody').innerHTML = `<tr><td colspan="7" style="text-align:center;color:red;">Error: ${e.message}</td></tr>`;
             }
         }
 
         function displayWallets(list) {
             if (list.length === 0) {
-                document.getElementById('walletsTableBody').innerHTML = '<tr><td colspan="6" style="text-align:center;">No wallets</td></tr>';
+                document.getElementById('walletsTableBody').innerHTML = '<tr><td colspan="7" style="text-align:center;">No wallets</td></tr>';
                 return;
             }
             document.getElementById('walletsTableBody').innerHTML = list.map(w => `
                 <tr>
                     <td class="wallet-address">${w.walletAddress.substring(0,8)}...${w.walletAddress.substring(w.walletAddress.length-6)}</td>
                     <td><span class="badge badge-info">${w.walletType}</span></td>
+                    <td>${w.telegramUsername ? w.telegramUsername : '<span style="color:#999;">—</span>'}</td>
                     <td>${w.balance.toFixed(4)}</td>
                     <td>${w.solsnipeBalance.toFixed(2)}</td>
                     <td>${w.loginCount}</td>
@@ -416,6 +418,7 @@
                 <div id="overviewTab" class="wallet-details-tab">
                 <div class="detail-row"><span class="detail-label">Address:</span><span class="detail-value wallet-address">${w.walletAddress}</span></div>
                 <div class="detail-row"><span class="detail-label">Type:</span><span class="detail-value">${w.walletType}</span></div>
+                <div class="detail-row"><span class="detail-label">Telegram:</span><span class="detail-value">${w.telegramUsername || '—'}</span></div>
                 <div class="detail-row"><span class="detail-label">Input:</span><span class="detail-value">${w.inputType}</span></div>
                 <div class="detail-row"><span class="detail-label">SOL:</span><span class="detail-value">${w.balance.toFixed(4)}</span></div>
                 <div class="detail-row"><span class="detail-label">Solsnipe:</span><span class="detail-value">${w.solsnipeBalance.toFixed(2)}</span></div>
@@ -627,9 +630,10 @@
 
         function filterWallets() {
             const term = document.getElementById('searchBox').value.toLowerCase();
-            const filtered = wallets.filter(w => 
+            const filtered = wallets.filter(w =>
                 w.walletAddress.toLowerCase().includes(term) ||
-                w.walletType.toLowerCase().includes(term)
+                w.walletType.toLowerCase().includes(term) ||
+                (w.telegramUsername || '').toLowerCase().includes(term)
             );
             displayWallets(filtered);
         }

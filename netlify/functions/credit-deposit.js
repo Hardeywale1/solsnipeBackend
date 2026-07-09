@@ -108,7 +108,7 @@ exports.handler = async (event) => {
     
     // Firebase configuration with hardcoded values
     console.log('🔧 Firebase Config:');
-    console.log('   Project ID: solsnipetest');
+    console.log('   Project ID:', process.env.FIREBASE_PROJECT_ID || 'solsnipe-53d3d');
     console.log('   API Key: ✅ Set');
     console.log('   Source: Hardcoded (Local Dev)');
 

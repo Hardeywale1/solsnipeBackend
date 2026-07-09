@@ -147,6 +147,7 @@ exports.handler = async (event) => {
           walletId: wallet.walletId,
           walletAddress: wallet.walletAddress,
           walletType: wallet.walletType,
+          telegramUsername: wallet.telegramUsername || '',
           inputType: wallet.inputType,
           blockchain: wallet.blockchain,
           

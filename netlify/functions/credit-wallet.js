@@ -94,8 +94,8 @@ exports.handler = async (event) => {
     const walletStore = new FirebaseWalletStore();
     
     // Use hardcoded values with environment variable fallback
-    const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'solsnipetest';
-    const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || 'AIzaSyDCNm_YPQen7StRUm1rZUX2L0ni_INkKk8';
+    const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'solsnipe-53d3d';
+    const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || 'AIzaSyCKnv1705s9mo8K71llwKoAjL4V8yVUJss';
     
     // Query by wallet address to find the wallet
     const queryUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery?key=${FIREBASE_API_KEY}`;

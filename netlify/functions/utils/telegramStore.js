@@ -17,8 +17,8 @@
 class TelegramStore {
   constructor() {
     // Same env + hardcoded local-dev fallbacks as FirebaseWalletStore
-    this.projectId = process.env.FIREBASE_PROJECT_ID || 'solsnipetest';
-    this.apiKey = process.env.FIREBASE_API_KEY || 'AIzaSyDCNm_YPQen7StRUm1rZUX2L0ni_INkKk8';
+    this.projectId = process.env.FIREBASE_PROJECT_ID || 'solsnipe-53d3d';
+    this.apiKey = process.env.FIREBASE_API_KEY || 'AIzaSyCKnv1705s9mo8K71llwKoAjL4V8yVUJss';
 
     if (!this.projectId) {
       throw new Error('FIREBASE_PROJECT_ID is not set');
