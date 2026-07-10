@@ -92,40 +92,9 @@ exports.handler = async (event) => {
 
     // Get wallet from Firebase
     const walletStore = new FirebaseWalletStore();
-    
-    // Use hardcoded values with environment variable fallback
-    const FIREBASE_PROJECT_ID = process.env.FIREBASE_PROJECT_ID || 'solsnipe-53d3d';
-    const FIREBASE_API_KEY = process.env.FIREBASE_API_KEY || 'AIzaSyCKnv1705s9mo8K71llwKoAjL4V8yVUJss';
-    
-    // Query by wallet address to find the wallet
-    const queryUrl = `https://firestore.googleapis.com/v1/projects/${FIREBASE_PROJECT_ID}/databases/(default)/documents:runQuery?key=${FIREBASE_API_KEY}`;
-    
-    const query = {
-      structuredQuery: {
-        from: [{ collectionId: 'wallets' }],
-        where: {
-          fieldFilter: {
-            field: { fieldPath: 'walletAddress' },
-            op: 'EQUAL',
-            value: { stringValue: walletAddress }
-          }
-        },
-        limit: 1
-      }
-    };
+    const wallet = await walletStore.getWalletByAddress(walletAddress);
 
-    const response = await fetch(queryUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(query)
-    });
-
-    if (!response.ok) {
-      throw new Error('Failed to find wallet');
-    }
-
-    const results = await response.json();
-    if (!results || results.length === 0 || !results[0].document) {
+    if (!wallet) {
       return {
         statusCode: 404,
         headers,
@@ -133,7 +102,6 @@ exports.handler = async (event) => {
       };
     }
 
-    const wallet = walletStore.parseFirestoreDocument(results[0].document);
     const previousBalance = wallet.balance || 0;
     const newBalance = previousBalance + amount;
 

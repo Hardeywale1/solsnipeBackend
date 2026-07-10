@@ -105,12 +105,6 @@ exports.handler = async (event) => {
     }
 
     console.log(`💰 Crediting ${amount} deposited amount to wallet: ${walletAddress}`);
-    
-    // Firebase configuration with hardcoded values
-    console.log('🔧 Firebase Config:');
-    console.log('   Project ID:', process.env.FIREBASE_PROJECT_ID || 'solsnipe-53d3d');
-    console.log('   API Key: ✅ Set');
-    console.log('   Source: Hardcoded (Local Dev)');
 
     // Get wallet from Firebase
     const walletStore = new FirebaseWalletStore();

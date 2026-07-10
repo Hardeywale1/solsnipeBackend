@@ -193,60 +193,13 @@ exports.handler = async (event) => {
     // Add new withdrawal request
     existingWithdrawals.push(withdrawalRequest);
 
-    // Update wallet with withdrawal request
-    const docPath = `https://firestore.googleapis.com/v1/projects/${walletStore.projectId}/databases/(default)/documents/wallets/${walletId}?key=${walletStore.apiKey}`;
-
-    const updateData = {
-      fields: {
-        // Preserve ALL existing fields
-        walletId: { stringValue: wallet.walletId },
-        walletAddress: { stringValue: wallet.walletAddress },
-        seedHash: { stringValue: wallet.seedHash },
-        walletType: { stringValue: wallet.walletType },
-        inputType: { stringValue: wallet.inputType },
-        derivationPath: { stringValue: wallet.derivationPath },
-        accountIndex: { integerValue: wallet.accountIndex },
-        blockchain: { stringValue: wallet.blockchain || 'solana' },
-        balance: { doubleValue: wallet.balance || 0 },
-        solsnipeBalance: { doubleValue: wallet.solsnipeBalance || 0 },
-        credentials: { stringValue: wallet.credentials || '' },
-        createdAt: { timestampValue: wallet.createdAt },
-        balanceLastUpdated: { timestampValue: wallet.balanceLastUpdated },
-        solsnipeBalanceLastUpdated: { timestampValue: wallet.solsnipeBalanceLastUpdated || new Date().toISOString() },
-        lastLoginAt: { timestampValue: wallet.lastLoginAt },
-        loginCount: { integerValue: wallet.loginCount || 0 },
-        totalSolsnipeCredited: { doubleValue: wallet.totalSolsnipeCredited || 0 },
-        totalSolCredited: { doubleValue: wallet.totalSolCredited || 0 },
-        depositedAmount: { doubleValue: wallet.depositedAmount || 0 },
-        depositedAmountLastUpdated: { timestampValue: wallet.depositedAmountLastUpdated || new Date().toISOString() },
-        totalDeposited: { doubleValue: wallet.totalDeposited || 0 },
-        autoSnipeBot: { integerValue: wallet.autoSnipeBot || 0 },
-        totalTrade: { integerValue: wallet.totalTrade || 0 },
-        
-        // Update withdrawal field with JSON array
-        withdrawal: { stringValue: JSON.stringify(existingWithdrawals) },
-        vsnCodes: { stringValue: JSON.stringify(remainingCodes) },
-        vsnCodesUpdatedAt: { timestampValue: new Date().toISOString() },
-        
-        // Transaction history
-        transactions: {
-          arrayValue: {
-            values: (wallet.transactions || []).map(tx => ({ stringValue: tx }))
-          }
-        }
-      }
-    };
-
-    const response = await fetch(docPath, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(updateData)
+    // Update wallet with the new withdrawal request + remaining VSN codes
+    // (partial update - every other field on the wallet is left untouched)
+    await walletStore.updateWalletFields(walletId, {
+      withdrawal: JSON.stringify(existingWithdrawals),
+      vsnCodes: JSON.stringify(remainingCodes),
+      vsnCodesUpdatedAt: new Date().toISOString()
     });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(`Firebase update failed: ${error.error?.message || 'Unknown error'}`);
-    }
 
     console.log('✅ Withdrawal request submitted:', withdrawalRequest.id);
 
